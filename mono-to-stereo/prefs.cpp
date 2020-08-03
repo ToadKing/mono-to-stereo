@@ -12,6 +12,8 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
 
 void usage(LPCWSTR exe) {
     LOG(
+        L"mono-to-stereo v%s\n"
+        L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
         L"%ls [--in-device \"Device long name\"] [--out-device \"Device long name\"] [--buffer-size 128] [--no-swap-channels]\n"
@@ -22,7 +24,7 @@ void usage(LPCWSTR exe) {
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
         L"    --no-swap-channels do not swap the L/R channels",
-        exe, exe, exe, DEFAULT_BUFFER_MS
+        VERSION, exe, exe, exe, DEFAULT_BUFFER_MS
     );
 }
 

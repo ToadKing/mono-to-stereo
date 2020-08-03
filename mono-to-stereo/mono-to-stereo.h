@@ -1,4 +1,4 @@
-// loopback-capture.h
+// mono-to-stereo.h
 
 // call CreateThread on this function
 // feed it the address of a LoopbackCaptureThreadFunctionArguments
@@ -6,6 +6,8 @@
 // and dump output to the HMMIO
 // until the stop event is set
 // any failures will be propagated back via hr
+
+#define VERSION L"0.2"
 
 struct LoopbackCaptureThreadFunctionArguments {
     IMMDevice *pMMInDevice;
