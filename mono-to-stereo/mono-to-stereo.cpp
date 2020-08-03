@@ -101,26 +101,13 @@ HRESULT LoopbackCapture(
 
     pwfx->nBlockAlign = pwfx->nChannels * pwfx->wBitsPerSample / 8;
 
-    // create a periodic waitable timer
-    HANDLE hWakeUp = CreateWaitableTimer(NULL, FALSE, NULL);
-    if (NULL == hWakeUp) {
-        DWORD dwErr = GetLastError();
-        ERR(L"CreateWaitableTimer failed: last error = %u", dwErr);
-        return HRESULT_FROM_WIN32(dwErr);
-    }
-    CloseHandleOnExit closeWakeUp(hWakeUp);
-
     UINT32 nBlockAlign = pwfx->nBlockAlign;
     *pnFrames = 0;
 
     // call IAudioClient::Initialize
-    // note that AUDCLNT_STREAMFLAGS_LOOPBACK and AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-    // do not work together...
-    // the "data ready" event never gets set
-    // so we're going to do a timer-driven loop
     hr = pAudioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
-        0,
+        AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
         0, 0, pwfx, 0
     );
     if (FAILED(hr)) {
@@ -150,22 +137,17 @@ HRESULT LoopbackCapture(
     }
     AvRevertMmThreadCharacteristicsOnExit unregisterMmcss(hTask);
 
-    // set the waitable timer
-    LARGE_INTEGER liFirstFire;
-    liFirstFire.QuadPart = -hnsDefaultDevicePeriod / 2; // negative means relative time
-    LONG lTimeBetweenFires = (LONG)hnsDefaultDevicePeriod / 2 / (10 * 1000); // convert to milliseconds
-    BOOL bOK = SetWaitableTimer(
-        hWakeUp,
-        &liFirstFire,
-        lTimeBetweenFires,
-        NULL, NULL, FALSE
-    );
-    if (!bOK) {
+    // create the event timer
+    HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (hEvent == NULL)
+    {
         DWORD dwErr = GetLastError();
-        ERR(L"SetWaitableTimer failed: last error = %u", dwErr);
+        ERR(L"CreateEvent failed: last error = %u", dwErr);
         return HRESULT_FROM_WIN32(dwErr);
     }
-    CancelWaitableTimerOnExit cancelWakeUp(hWakeUp);
+    CloseHandleOnExit closeEvent(hEvent);
+
+    pAudioClient->SetEventHandle(hEvent);
 
     // call IAudioClient::Start
     hr = pAudioClient->Start();
@@ -193,8 +175,8 @@ HRESULT LoopbackCapture(
     hr = pAudioOutClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
         0,
-        iBufferMs * 10000,
-        iBufferMs * 10000,
+        (REFERENCE_TIME)iBufferMs * 10000,
+        0,
         pwfx,
         NULL);
     if (FAILED(hr)) {
@@ -238,112 +220,97 @@ HRESULT LoopbackCapture(
     SetEvent(hStartedEvent);
 
     // loopback capture loop
-    HANDLE waitArray[2] = { hStopEvent, hWakeUp };
+    HANDLE waitArray[2] = { hStopEvent, hEvent };
     DWORD dwWaitResult;
 
     bool bDone = false;
-    bool bFirstPacket = true;
-    for (UINT32 nPasses = 0; !bDone; nPasses++) {
-        // drain data while it is available
-        UINT32 nNextPacketSize;
-        for (
-            hr = pAudioCaptureClient->GetNextPacketSize(&nNextPacketSize);
-            SUCCEEDED(hr) && nNextPacketSize > 0;
-            hr = pAudioCaptureClient->GetNextPacketSize(&nNextPacketSize)
-            ) {
-            // get the captured data
-            BYTE *pData;
-            BYTE *pOutData;
-            UINT32 nNumFramesToRead;
-            DWORD dwFlags;
 
-            hr = pAudioCaptureClient->GetBuffer(
-                &pData,
-                &nNumFramesToRead,
-                &dwFlags,
-                NULL,
-                NULL
-            );
-            if (FAILED(hr)) {
-                ERR(L"IAudioCaptureClient::GetBuffer failed on pass %u after %u frames: hr = 0x%08x", nPasses, *pnFrames, hr);
-                return hr;
-            }
-
-            if (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY == dwFlags) {
-                LOG(L"Probably spurious glitch reported on pass %u after %u frames", nPasses, *pnFrames);
-            }
-            else if (0 != dwFlags) {
-                LOG(L"IAudioCaptureClient::GetBuffer set flags to 0x%08x on pass %u after %u frames", dwFlags, nPasses, *pnFrames);
-                return E_UNEXPECTED;
-            }
-
-            nNumFramesToRead &= ~1;
-
-            if (0 == nNumFramesToRead) {
-                ERR(L"IAudioCaptureClient::GetBuffer said to read 0 frames on pass %u after %u frames", nPasses, *pnFrames);
-                return E_UNEXPECTED;
-            }
-
-            LONG lBytesToWrite = nNumFramesToRead * nBlockAlign;
-
-            for (;;) {
-                hr = pRenderClient->GetBuffer(nNumFramesToRead / 2, &pOutData);
-                if (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
-                    ERR(L"%s", L"buffer overflow!");
-                    Sleep(1);
-                    continue;
-                }
-                if (FAILED(hr)) {
-                    ERR(L"IAudioCaptureClient::GetBuffer failed (output) on pass %u after %u frames: hr = 0x%08x", nPasses, *pnFrames, hr);
-                    return hr;
-                }
-                break;
-            }
-
-            if (bSwapChannels) {
-                swapMemcpy(pOutData, pData, lBytesToWrite, nBlockAlign);
-            }
-            else {
-                memcpy(pOutData, pData, lBytesToWrite);
-            }
-
-            hr = pRenderClient->ReleaseBuffer(nNumFramesToRead / 2, 0);
-            if (FAILED(hr)) {
-                ERR(L"IAudioCaptureClient::ReleaseBuffer failed (output) on pass %u after %u frames: hr = 0x%08x", nPasses, *pnFrames, hr);
-                return hr;
-            }
-
-            hr = pAudioCaptureClient->ReleaseBuffer(nNumFramesToRead);
-            if (FAILED(hr)) {
-                ERR(L"IAudioCaptureClient::ReleaseBuffer failed on pass %u after %u frames: hr = 0x%08x", nPasses, *pnFrames, hr);
-                return hr;
-            }
-
-            *pnFrames += nNumFramesToRead;
-
-            bFirstPacket = false;
-        }
-
-        if (FAILED(hr)) {
-            ERR(L"IAudioCaptureClient::GetNextPacketSize failed on pass %u after %u frames: hr = 0x%08x", nPasses, *pnFrames, hr);
-            return hr;
-        }
-
+    while (!bDone) {
         dwWaitResult = WaitForMultipleObjects(
             ARRAYSIZE(waitArray), waitArray,
             FALSE, INFINITE
         );
 
         if (WAIT_OBJECT_0 == dwWaitResult) {
-            LOG(L"Received stop event after %u passes and %u frames", nPasses, *pnFrames);
+            LOG(L"Received stop event after %u frames", *pnFrames);
             bDone = true;
             continue; // exits loop
         }
 
         if (WAIT_OBJECT_0 + 1 != dwWaitResult) {
-            ERR(L"Unexpected WaitForMultipleObjects return value %u on pass %u after %u frames", dwWaitResult, nPasses, *pnFrames);
+            ERR(L"Unexpected WaitForMultipleObjects return value %u after %u frames", dwWaitResult, *pnFrames);
             return E_UNEXPECTED;
         }
+
+        // get the captured data
+        BYTE *pData;
+        BYTE *pOutData;
+        UINT32 nNumFramesToRead;
+        DWORD dwFlags;
+
+        hr = pAudioCaptureClient->GetBuffer(
+            &pData,
+            &nNumFramesToRead,
+            &dwFlags,
+            NULL,
+            NULL
+        );
+        if (FAILED(hr)) {
+            ERR(L"IAudioCaptureClient::GetBuffer failed after %u frames: hr = 0x%08x", *pnFrames, hr);
+            return hr;
+        }
+
+        if (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY == dwFlags) {
+            LOG(L"Probably spurious glitch reported after %u frames", *pnFrames);
+        }
+        else if (0 != dwFlags) {
+            LOG(L"IAudioCaptureClient::GetBuffer set flags to 0x%08x after %u frames", dwFlags, *pnFrames);
+            return E_UNEXPECTED;
+        }
+
+        nNumFramesToRead &= ~1;
+
+        if (0 == nNumFramesToRead) {
+            LOG(L"IAudioCaptureClient::GetBuffer said to read 0 frames after %u frames", *pnFrames);
+            continue;
+        }
+
+        LONG lBytesToWrite = nNumFramesToRead * nBlockAlign;
+
+        for (;;) {
+            hr = pRenderClient->GetBuffer(nNumFramesToRead / 2, &pOutData);
+            if (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
+                ERR(L"%s", L"buffer overflow!");
+                Sleep(1);
+                continue;
+            }
+            if (FAILED(hr)) {
+                ERR(L"IAudioCaptureClient::GetBuffer failed (output) after %u frames: hr = 0x%08x", *pnFrames, hr);
+                return hr;
+            }
+            break;
+        }
+
+        if (bSwapChannels) {
+            swapMemcpy(pOutData, pData, lBytesToWrite, pwfx->wBitsPerSample / 8);
+        }
+        else {
+            memcpy(pOutData, pData, lBytesToWrite);
+        }
+
+        hr = pRenderClient->ReleaseBuffer(nNumFramesToRead / 2, 0);
+        if (FAILED(hr)) {
+            ERR(L"IAudioCaptureClient::ReleaseBuffer failed (output) after %u frames: hr = 0x%08x", *pnFrames, hr);
+            return hr;
+        }
+
+        hr = pAudioCaptureClient->ReleaseBuffer(nNumFramesToRead);
+        if (FAILED(hr)) {
+            ERR(L"IAudioCaptureClient::ReleaseBuffer failed after %u frames: hr = 0x%08x", *pnFrames, hr);
+            return hr;
+        }
+
+        *pnFrames += nNumFramesToRead;
     } // capture loop
 
     return hr;
