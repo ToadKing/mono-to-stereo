@@ -1,12 +1,13 @@
 // mono-to-stereo.cpp
 
 #include "common.h"
+#include <vector>
 
 HRESULT LoopbackCapture(
     IMMDevice* pMMInDevice,
     IMMDevice* pMMOutDevice,
     int iBufferMs,
-    bool bSwapChannels,
+    bool bSkipFirstSample,
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
     PUINT32 pnFrames
@@ -27,7 +28,7 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
         pArgs->pMMInDevice,
         pArgs->pMMOutDevice,
         pArgs->iBufferMs,
-        pArgs->bSwapChannels,
+        pArgs->bSkipFirstSample,
         pArgs->hStartedEvent,
         pArgs->hStopEvent,
         &pArgs->nFrames
@@ -36,33 +37,11 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
     return 0;
 }
 
-void swapMemcpy(void* _dst, const void* _src, size_t size, bool doSwap, size_t chunkSize) {
-    if (!doSwap) {
-        memcpy(_dst, _src, size);
-        return;
-    }
-
-    size_t blockSize = chunkSize * 2;
-
-    if (size % blockSize != 0) {
-        ERR("bad swapMemcpy size (size %zu, chunkSize %zu)", size, chunkSize);
-        return;
-    }
-
-    BYTE* dst = (BYTE*)_dst;
-    const BYTE* src = (BYTE*)_src;
-
-    for (size_t i = 0; i < size / blockSize; i++) {
-        memcpy(dst + i * blockSize, src + i * blockSize + chunkSize, chunkSize);
-        memcpy(dst + i * blockSize + chunkSize, src + i * blockSize, chunkSize);
-    }
-}
-
 HRESULT LoopbackCapture(
     IMMDevice* pMMInDevice,
     IMMDevice* pMMOutDevice,
     int iBufferMs,
-    bool bSwapChannels,
+    bool bSkipFirstSample,
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
     PUINT32 pnFrames
@@ -245,6 +224,11 @@ HRESULT LoopbackCapture(
 
     bool bDone = false;
 
+    std::vector<BYTE> lastSample;
+    if (bSkipFirstSample) {
+        lastSample.resize(nBlockAlign);
+    }
+
     while (!bDone) {
         dwWaitResult = WaitForMultipleObjects(
             ARRAYSIZE(waitArray), waitArray,
@@ -329,7 +313,14 @@ HRESULT LoopbackCapture(
                 break;
             }
 
-            swapMemcpy(pOutData, pData, lBytesToWrite, bSwapChannels, nBlockAlign);
+            if (bSkipFirstSample) {
+                memcpy(pOutData, lastSample.data(), nBlockAlign);
+                memcpy(pOutData + nBlockAlign, pData, static_cast<size_t>(lBytesToWrite) - nBlockAlign);
+                memcpy(lastSample.data(), pData + lBytesToWrite - nBlockAlign, nBlockAlign);
+            }
+            else {
+                memcpy(pOutData, pData, lBytesToWrite);
+            }
 
             hr = pRenderClient->ReleaseBuffer(output_frames_to_write, 0);
             if (FAILED(hr)) {

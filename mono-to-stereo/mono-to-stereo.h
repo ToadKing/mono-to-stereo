@@ -7,13 +7,13 @@
 // until the stop event is set
 // any failures will be propagated back via hr
 
-#define VERSION L"0.3"
+#define VERSION L"0.4"
 
 struct LoopbackCaptureThreadFunctionArguments {
     IMMDevice *pMMInDevice;
     IMMDevice *pMMOutDevice;
     int iBufferMs;
-    bool bSwapChannels;
+    bool bSkipFirstSample;
     HANDLE hStartedEvent;
     HANDLE hStopEvent;
     UINT32 nFrames;

@@ -53,7 +53,7 @@ int do_everything(int argc, LPCWSTR argv[]) {
     threadArgs.pMMInDevice = prefs.m_pMMInDevice;
     threadArgs.pMMOutDevice = prefs.m_pMMOutDevice;
     threadArgs.iBufferMs = prefs.m_iBufferMs;
-    threadArgs.bSwapChannels = prefs.m_bSwapChannels;
+    threadArgs.bSkipFirstSample = prefs.m_bSkipFirstSample;
     threadArgs.hStartedEvent = hStartedEvent;
     threadArgs.hStopEvent = hStopEvent;
     threadArgs.nFrames = 0;

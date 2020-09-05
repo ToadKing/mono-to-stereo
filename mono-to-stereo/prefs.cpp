@@ -16,14 +16,14 @@ void usage(LPCWSTR exe) {
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
-        L"%ls [--in-device \"Device long name\"] [--out-device \"Device long name\"] [--buffer-size 128] [--no-swap-channels]\n"
+        L"%ls [--in-device \"Device long name\"] [--out-device \"Device long name\"] [--buffer-size 128] [--no-skip-first-sample]\n"
         L"\n"
         L"    -? prints this message.\n"
         L"    --list-devices displays the long names of all active capture and render devices.\n"
         L"    --in-device captures from the specified device to capture (\"Digital Audio Interface (USB Digital Audio)\" if omitted)\n"
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
-        L"    --no-swap-channels do not swap the L/R channels",
+        L"    --no-skip-first-sample do not skip the first channel sample",
         VERSION, exe, exe, exe, DEFAULT_BUFFER_MS
     );
 }
@@ -32,7 +32,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
     : m_pMMInDevice(NULL)
     , m_pMMOutDevice(NULL)
     , m_iBufferMs(DEFAULT_BUFFER_MS)
-    , m_bSwapChannels(true)
+    , m_bSkipFirstSample(true)
 {
     switch (argc) {
     case 2:
@@ -120,9 +120,9 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 continue;
             }
 
-            // --no-swap-channels
-            if (0 == _wcsicmp(argv[i], L"--no-swap-channels")) {
-                m_bSwapChannels = false;
+            // --no-skip-first-sample
+            if (0 == _wcsicmp(argv[i], L"--no-skip-first-sample")) {
+                m_bSkipFirstSample = false;
                 continue;
             }
 
