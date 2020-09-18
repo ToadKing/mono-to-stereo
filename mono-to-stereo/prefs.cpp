@@ -1,5 +1,5 @@
 // prefs.cpp
-
+#include <locale.h>
 #include "common.h"
 
 #define DEFAULT_BUFFER_MS 64
@@ -34,6 +34,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
     , m_iBufferMs(DEFAULT_BUFFER_MS)
     , m_bSkipFirstSample(true)
 {
+    setlocale(LC_ALL, "");
     switch (argc) {
     case 2:
         if (0 == _wcsicmp(argv[1], L"-?") || 0 == _wcsicmp(argv[1], L"/?")) {
