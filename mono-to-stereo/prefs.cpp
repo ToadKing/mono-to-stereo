@@ -193,7 +193,7 @@ HRESULT list_devices() {
         return hr;
     }
 
-    LOG("");
+    LOG(L"");
 
     hr = list_devices_with_direction(eCapture, L"capture");
     if (FAILED(hr)) {
