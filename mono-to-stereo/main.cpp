@@ -101,6 +101,8 @@ int do_everything(int argc, LPCWSTR argv[]) {
 
         LOG(L"%s", L"Press Enter to quit...");
 
+        FlushConsoleInputBuffer(hStdIn);
+
         HANDLE rhHandles[2] = { hThread, hStdIn };
 
         bool bKeepWaiting = true;
