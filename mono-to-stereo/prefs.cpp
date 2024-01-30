@@ -16,7 +16,7 @@ void usage(LPCWSTR exe) {
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
-        L"%ls [--in-device \"Device long name\"] [--out-device \"Device long name\"] [--buffer-size 128] [--no-skip-first-sample]\n"
+        L"%ls [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex] [--buffer-size 128] [--no-skip-first-sample]\n"
         L"\n"
         L"    -? prints this message.\n"
         L"    --list-devices displays the long names of all active capture and render devices.\n"
@@ -274,10 +274,25 @@ HRESULT list_devices_with_direction(EDataFlow direction, const wchar_t *directio
             return E_UNEXPECTED;
         }
 
-        LOG(L"    %ls", pv.pwszVal);
+        LOG(L"%u)    '%ls'", i + 1, pv.pwszVal);
     }
 
     return S_OK;
+}
+
+BOOL is_numeric(LPCWSTR szLongName, LPLONG lpOut) {
+
+	WCHAR* p;
+
+	LONG lResult = wcstol(szLongName, &p, 10);
+
+	if (*p == 0) { // at end of wide string
+		if (lpOut)
+			*lpOut = lResult;
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice **ppMMDevice) {
@@ -310,6 +325,12 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
         return hr;
     }
     ReleaseOnExit releaseMMDeviceCollection(pMMDeviceCollection);
+
+	LONG lIndex = 0;
+	is_numeric(szLongName, &lIndex);
+
+	// limit number of deviecs to 1024 so its not bigger then a UINT
+	UINT index = (lIndex > 0L && lIndex <= 1024L) ? (UINT)lIndex : 0;
 
     UINT count;
     hr = pMMDeviceCollection->GetCount(&count);
@@ -352,8 +373,16 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
             return E_UNEXPECTED;
         }
 
-        // is it a match?
-        if (0 == _wcsicmp(pv.pwszVal, szLongName)) {
+		// is it a match?
+		if (index > 0) {
+			if (index == (i + 1)) {
+				*ppMMDevice = pMMDevice;
+				pMMDevice->AddRef();
+				// exit loop if searching by index
+				break;
+			}
+		}
+        else if (0 == _wcsicmp(pv.pwszVal, szLongName)) {
             // did we already find it?
             if (NULL == *ppMMDevice) {
                 *ppMMDevice = pMMDevice;
