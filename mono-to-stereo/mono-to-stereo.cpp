@@ -171,17 +171,16 @@ HRESULT LoopbackCapture(
         return hr;
     }
 
-	WAVEFORMATEX* pSupported = NULL;
-	hr = pAudioOutClient->IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, pwfx, &pSupported);
-	//AUDCLNT_E_UNSUPPORTED_FORMAT
-	if (hr != S_OK) {
-		// S_FALSE or FAILED(hr)
-		LOG(L" Channels %ld -> %ld", pwfx->nChannels, pSupported->nChannels);
-		LOG(L" BitsPerSample %ld -> %ld", pwfx->wBitsPerSample, pSupported->wBitsPerSample);
-		LOG(L" SamplesPerSec %ld -> %ld", pwfx->nSamplesPerSec, pSupported->nSamplesPerSec);
-		ERR(L"IAudioClient::IsFormatSupported failed (output): hr = 0x%08x", hr);
-		return hr;
-	}
+    WAVEFORMATEX* pSupported = NULL;
+    hr = pAudioOutClient->IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, pwfx, &pSupported);
+    if (hr != S_OK) {
+        // S_FALSE or FAILED(hr)
+        LOG(L" Channels %ld -> %ld", pwfx->nChannels, pSupported->nChannels);
+        LOG(L" BitsPerSample %ld -> %ld", pwfx->wBitsPerSample, pSupported->wBitsPerSample);
+        LOG(L" SamplesPerSec %ld -> %ld", pwfx->nSamplesPerSec, pSupported->nSamplesPerSec);
+        ERR(L"IAudioClient::IsFormatSupported failed (output): hr = 0x%08x", hr);
+        return hr;
+    }
 
     hr = pAudioOutClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,

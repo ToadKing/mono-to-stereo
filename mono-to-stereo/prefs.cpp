@@ -282,17 +282,17 @@ HRESULT list_devices_with_direction(EDataFlow direction, const wchar_t *directio
 
 BOOL is_numeric(LPCWSTR szLongName, LPLONG lpOut) {
 
-	WCHAR* p;
+    WCHAR* p;
 
-	LONG lResult = wcstol(szLongName, &p, 10);
+    LONG lResult = wcstol(szLongName, &p, 10);
 
-	if (*p == 0) { // at end of wide string
-		if (lpOut)
-			*lpOut = lResult;
-		return TRUE;
-	}
+    if (*p == 0) { // at end of wide string
+        if (lpOut)
+            *lpOut = lResult;
+        return TRUE;
+    }
 
-	return FALSE;
+    return FALSE;
 }
 
 HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice **ppMMDevice) {
@@ -326,11 +326,11 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
     }
     ReleaseOnExit releaseMMDeviceCollection(pMMDeviceCollection);
 
-	LONG lIndex = 0;
-	is_numeric(szLongName, &lIndex);
+    LONG lIndex = 0;
+    is_numeric(szLongName, &lIndex);
 
-	// limit number of deviecs to 1024 so its not bigger then a UINT
-	UINT index = (lIndex > 0L && lIndex <= 1024L) ? (UINT)lIndex : 0;
+    // limit number of deviecs to 1024 so its not bigger then a UINT
+    UINT index = (lIndex > 0L && lIndex <= 1024L) ? (UINT)lIndex : 0;
 
     UINT count;
     hr = pMMDeviceCollection->GetCount(&count);
@@ -373,15 +373,15 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
             return E_UNEXPECTED;
         }
 
-		// is it a match?
-		if (index > 0) {
-			if (index == (i + 1)) {
-				*ppMMDevice = pMMDevice;
-				pMMDevice->AddRef();
-				// exit loop if searching by index
-				break;
-			}
-		}
+        // is it a match?
+        if (index > 0) {
+            if (index == (i + 1)) {
+                *ppMMDevice = pMMDevice;
+                pMMDevice->AddRef();
+                // exit loop if searching by index
+                break;
+            }
+        }
         else if (0 == _wcsicmp(pv.pwszVal, szLongName)) {
             // did we already find it?
             if (NULL == *ppMMDevice) {
