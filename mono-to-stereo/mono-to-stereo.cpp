@@ -302,7 +302,7 @@ HRESULT LoopbackCapture(
                 return E_UNEXPECTED;
             }
 
-            if (nNumFramesToRead % 1 != 0) {
+            if (nNumFramesToRead % 2 != 0) {
                 ERR(L"frames to output is odd (%u), will miss the last sample after %u frames", nNumFramesToRead, *pnFrames);
             }
 
