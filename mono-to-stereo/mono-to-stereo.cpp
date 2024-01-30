@@ -171,6 +171,18 @@ HRESULT LoopbackCapture(
         return hr;
     }
 
+	WAVEFORMATEX* pSupported = NULL;
+	hr = pAudioOutClient->IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, pwfx, &pSupported);
+	//AUDCLNT_E_UNSUPPORTED_FORMAT
+	if (hr != S_OK) {
+		// S_FALSE or FAILED(hr)
+		LOG(L" Channels %ld -> %ld", pwfx->nChannels, pSupported->nChannels);
+		LOG(L" BitsPerSample %ld -> %ld", pwfx->wBitsPerSample, pSupported->wBitsPerSample);
+		LOG(L" SamplesPerSec %ld -> %ld", pwfx->nSamplesPerSec, pSupported->nSamplesPerSec);
+		ERR(L"IAudioClient::IsFormatSupported failed (output): hr = 0x%08x", hr);
+		return hr;
+	}
+
     hr = pAudioOutClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
         0,
@@ -292,7 +304,7 @@ HRESULT LoopbackCapture(
             }
 
             if (nNumFramesToRead % 1 != 0) {
-                ERR("frames to output is odd (%u), will miss the last sample after %u frames", nNumFramesToRead, *pnFrames);
+                ERR(L"frames to output is odd (%u), will miss the last sample after %u frames", nNumFramesToRead, *pnFrames);
             }
 
             UINT32 output_frames_to_write = nNumFramesToRead / 2;
@@ -302,7 +314,7 @@ HRESULT LoopbackCapture(
             for (;;) {
                 hr = pRenderClient->GetBuffer(output_frames_to_write, &pOutData);
                 if (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
-                    ERR(L"%s", L"buffer overflow!");
+                    ERR(L"%ls", L"buffer overflow!");
                     Sleep(1);
                     continue;
                 }
