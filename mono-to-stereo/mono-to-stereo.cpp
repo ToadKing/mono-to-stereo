@@ -37,6 +37,33 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
     return 0;
 }
 
+void stridecpy(void *dst, const void *src, size_t size, UINT stride, UINT skip, INT fill) {
+
+    if (skip == 0) {
+        memcpy(dst, src, size);
+        return;
+    }
+
+    size_t chunk = 0;
+    size_t count = 0;
+    size_t offset = 0;
+
+    char *out = (char *)dst;
+    char *in = (char *)src;
+
+    while (count < size) {
+        if (count > 0) {
+            memset(out + offset, fill, skip);
+            offset += skip;
+        }
+
+        chunk = 0;
+        while (count < size && chunk++ < stride) {
+            out[offset++] = in[count++];
+        }
+    }
+}
+
 HRESULT LoopbackCapture(
     IMMDevice* pMMInDevice,
     IMMDevice* pMMOutDevice,
@@ -85,7 +112,7 @@ HRESULT LoopbackCapture(
 
     if (pwfx->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
         auto pwfxExtensible = reinterpret_cast<PWAVEFORMATEXTENSIBLE>(pwfx);
-        if (!IsEqualGUID(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, pwfxExtensible->SubFormat) && !IsEqualGUID(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, pwfxExtensible->SubFormat)) {
+        if (!IsEqualGUID(KSDATAFORMAT_SUBTYPE_PCM, pwfxExtensible->SubFormat) && !IsEqualGUID(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, pwfxExtensible->SubFormat)) {
             OLECHAR subFormatGUID[39];
             StringFromGUID2(pwfxExtensible->SubFormat, subFormatGUID, _countof(subFormatGUID));
             ERR(L"extensible input format not PCM, got %s", subFormatGUID);
@@ -156,39 +183,57 @@ HRESULT LoopbackCapture(
     AudioClientStopOnExit stopAudioClient(pAudioClient);
 
     // update format for stereo conversion
-    pwfx->nChannels *= 2;
-    pwfx->nSamplesPerSec /= 2;
+    pwfx->nChannels *= 2; // from mono to stereo
+    pwfx->nSamplesPerSec /= 2; // from 96000 -> 48000
     pwfx->nBlockAlign *= 2;
-    UINT32 OutputBlockAlign = pwfx->nBlockAlign;
+
+    nBlockAlign = pwfx->nBlockAlign;
 
     // set up output device
     IAudioClient* pAudioOutClient;
     hr = pMMOutDevice->Activate(
-        __uuidof(IAudioClient), CLSCTX_ALL,
-        NULL, (void**)&pAudioOutClient);
+        __uuidof(IAudioClient),
+        CLSCTX_ALL, NULL,
+        (void**)&pAudioOutClient
+    );
     if (FAILED(hr)) {
         ERR(L"IMMDevice::Activate(IAudioClient) failed (output): hr = 0x%08x", hr);
         return hr;
     }
+    ReleaseOnExit releaseAudioOutClient(pAudioOutClient);
 
-    WAVEFORMATEX* pSupported = NULL;
-    hr = pAudioOutClient->IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, pwfx, &pSupported);
+
+    UINT upMix = 0;
+    WAVEFORMATEX* pwfxOut = NULL;
+    hr = pAudioOutClient->IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, pwfx, &pwfxOut);
     if (hr != S_OK) {
         // S_FALSE or FAILED(hr)
-        LOG(L" Channels %ld -> %ld", pwfx->nChannels, pSupported->nChannels);
-        LOG(L" BitsPerSample %ld -> %ld", pwfx->wBitsPerSample, pSupported->wBitsPerSample);
-        LOG(L" SamplesPerSec %ld -> %ld", pwfx->nSamplesPerSec, pSupported->nSamplesPerSec);
-        ERR(L"IAudioClient::IsFormatSupported failed (output): hr = 0x%08x", hr);
-        return hr;
+        if (pwfx->wBitsPerSample == pwfxOut->wBitsPerSample &&
+            pwfx->nSamplesPerSec == pwfxOut->nSamplesPerSec &&
+            pwfxOut->nChannels > pwfx->nChannels) {
+
+            upMix = (UINT)pwfxOut->nChannels;
+        }
+        else {
+            LOG(L" Channels %ld -> %ld", pwfx->nChannels, pwfxOut->nChannels);
+            LOG(L" BitsPerSample %ld -> %ld", pwfx->wBitsPerSample, pwfxOut->wBitsPerSample);
+            LOG(L" SamplesPerSec %ld -> %ld", pwfx->nSamplesPerSec, pwfxOut->nSamplesPerSec);
+            ERR(L"IAudioClient::IsFormatSupported failed (output): hr = 0x%08x", hr);
+            return hr;
+        }
+    }
+    else {
+        pwfxOut = pwfx;
     }
 
+    UINT32 OutputBlockAlign = pwfxOut->nBlockAlign;
+    UINT32 SkipBlockAlign = OutputBlockAlign - nBlockAlign;
+
     hr = pAudioOutClient->Initialize(
-        AUDCLNT_SHAREMODE_SHARED,
-        0,
-        static_cast<REFERENCE_TIME>(iBufferMs) * 10000,
-        0,
-        pwfx,
-        NULL);
+        AUDCLNT_SHAREMODE_SHARED, 0,
+        static_cast<REFERENCE_TIME>(iBufferMs) * 1000, //10000
+        0, pwfxOut, 0
+    );
     if (FAILED(hr)) {
         ERR(L"IAudioClient::Initialize failed (output): hr = 0x%08x", hr);
         return hr;
@@ -197,7 +242,13 @@ HRESULT LoopbackCapture(
     IAudioRenderClient* pRenderClient;
     hr = pAudioOutClient->GetService(
         __uuidof(IAudioRenderClient),
-        (void**)&pRenderClient);
+        (void**)&pRenderClient
+    );
+    if (FAILED(hr)) {
+        ERR(L"IAudioClient::GetService(IAudioRenderClient) failed: hr = 0x%08x", hr);
+        return hr;
+    }
+    ReleaseOnExit releaseAudioRenderClient(pRenderClient);
 
     // Get the actual size of the allocated buffer.
     UINT32 clientBufferFrameCount;
@@ -226,6 +277,7 @@ HRESULT LoopbackCapture(
         ERR(L"IAudioClient::Start failed (output): hr = 0x%08x", hr);
         return hr;
     }
+    AudioClientStopOnExit stopAudioOutClient(pAudioOutClient);
 
     SetEvent(hStartedEvent);
 
@@ -275,13 +327,7 @@ HRESULT LoopbackCapture(
                 break;
             }
 
-            hr = pAudioCaptureClient->GetBuffer(
-                &pData,
-                &nNumFramesToRead,
-                &dwFlags,
-                NULL,
-                NULL
-            );
+            hr = pAudioCaptureClient->GetBuffer(&pData, &nNumFramesToRead, &dwFlags, NULL, NULL);
             if (FAILED(hr)) {
                 ERR(L"IAudioCaptureClient::GetBuffer failed after %u frames: hr = 0x%08x", *pnFrames, hr);
                 return hr;
@@ -289,6 +335,8 @@ HRESULT LoopbackCapture(
 
             if (nNextPacketSize != nNumFramesToRead) {
                 ERR(L"GetNextPacketSize and GetBuffer values don't match (%u and %u) after %u frames", nNextPacketSize, nNumFramesToRead, *pnFrames);
+                // release capture buffer before exiting
+                pAudioCaptureClient->ReleaseBuffer(nNumFramesToRead);
                 return E_UNEXPECTED;
             }
 
@@ -299,6 +347,8 @@ HRESULT LoopbackCapture(
             }
             else if (0 != dwFlags) {
                 LOG(L"IAudioCaptureClient::GetBuffer set flags to 0x%08x after %u frames", dwFlags, *pnFrames);
+                // release capture buffer before exiting
+                pAudioCaptureClient->ReleaseBuffer(nNumFramesToRead);
                 return E_UNEXPECTED;
             }
 
@@ -306,34 +356,36 @@ HRESULT LoopbackCapture(
                 ERR(L"frames to output is odd (%u), will miss the last sample after %u frames", nNumFramesToRead, *pnFrames);
             }
 
-            UINT32 output_frames_to_write = nNumFramesToRead / 2;
-
-            LONG lBytesToWrite = output_frames_to_write * OutputBlockAlign;
+            // this is halved because nNumFramesToRead came from a mono source
+            UINT32 nNumFramesToWrite = nNumFramesToRead / 2;
+            LONG lBytesWeRead = nNumFramesToWrite * nBlockAlign;
 
             for (;;) {
-                hr = pRenderClient->GetBuffer(output_frames_to_write, &pOutData);
+                hr = pRenderClient->GetBuffer(nNumFramesToWrite, &pOutData);
                 if (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
                     ERR(L"%ls", L"buffer overflow!");
                     Sleep(1);
                     continue;
                 }
-                if (FAILED(hr)) {
+                else if (FAILED(hr)) {
                     ERR(L"IAudioCaptureClient::GetBuffer failed (output) after %u frames: hr = 0x%08x", *pnFrames, hr);
+                    // release capture buffer before exiting
+                    pAudioCaptureClient->ReleaseBuffer(nNumFramesToRead);
                     return hr;
                 }
                 break;
             }
 
             if (bSkipFirstSample) {
-                memcpy(pOutData, lastSample.data(), nBlockAlign);
-                memcpy(pOutData + nBlockAlign, pData, static_cast<size_t>(lBytesToWrite) - nBlockAlign);
-                memcpy(lastSample.data(), pData + lBytesToWrite - nBlockAlign, nBlockAlign);
+                stridecpy(pOutData, lastSample.data(), nBlockAlign, nBlockAlign, SkipBlockAlign, 0);
+                stridecpy(pOutData + OutputBlockAlign, pData, static_cast<size_t>(lBytesWeRead - nBlockAlign), nBlockAlign, SkipBlockAlign, 0);
+                memcpy(lastSample.data(), pData + lBytesWeRead - nBlockAlign, nBlockAlign);
             }
             else {
-                memcpy(pOutData, pData, lBytesToWrite);
+                stridecpy(pOutData, pData, lBytesWeRead, nBlockAlign, SkipBlockAlign, 0);
             }
 
-            hr = pRenderClient->ReleaseBuffer(output_frames_to_write, 0);
+            hr = pRenderClient->ReleaseBuffer(nNumFramesToWrite, 0);
             if (FAILED(hr)) {
                 ERR(L"IAudioCaptureClient::ReleaseBuffer failed (output) after %u frames: hr = 0x%08x", *pnFrames, hr);
                 return hr;
