@@ -8,6 +8,6 @@ missing first sample is done by default.
 Original code based off of [Matthew van Eerde's loopback-capture](https://github.com/mvaneerde/blog/tree/master/loopback-capture)
 project.
 
-Includes fixes Quad channel, 5.1 and 7.1 sound card setups.
+Includes fixes for Quad channel, 5.1 and 7.1 sound card setups.
 
 Run `mono-to-stereo.exe -?` for usage instructions.
