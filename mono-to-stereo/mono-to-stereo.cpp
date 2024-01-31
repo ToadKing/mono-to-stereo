@@ -231,7 +231,7 @@ HRESULT LoopbackCapture(
 
     hr = pAudioOutClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED, 0,
-        static_cast<REFERENCE_TIME>(iBufferMs) * 1000, //10000
+        static_cast<REFERENCE_TIME>(iBufferMs) * 10000,
         0, pwfxOut, 0
     );
     if (FAILED(hr)) {
