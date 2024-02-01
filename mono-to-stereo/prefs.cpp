@@ -12,7 +12,7 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
 
 void usage(LPCWSTR exe) {
     LOG(
-        L"mono-to-stereo v%s\n"
+        L"audio-to-audio v%s\n"
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
@@ -23,7 +23,9 @@ void usage(LPCWSTR exe) {
         L"    --in-device captures from the specified device to capture (\"Digital Audio Interface (USB Digital Audio)\" if omitted)\n"
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
-        L"    --no-skip-first-sample do not skip the first channel sample",
+        L"    --duplicate-channels duplicate channel data to other channels\n"
+        L"    --force-mono-to-stereo force mono capture audio to be treated as stereo without conversion\n"
+        L"    --skip-first-sample skip the first channel sample",
         VERSION, exe, exe, exe, DEFAULT_BUFFER_MS
     );
 }
@@ -32,7 +34,9 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
     : m_pMMInDevice(NULL)
     , m_pMMOutDevice(NULL)
     , m_iBufferMs(DEFAULT_BUFFER_MS)
-    , m_bSkipFirstSample(true)
+    , m_bDuplicateChannels(false)
+    , m_bForceMonoToStereo(false)
+    , m_bSkipFirstSample(false)
 {
     switch (argc) {
     case 2:
@@ -120,9 +124,21 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 continue;
             }
 
-            // --no-skip-first-sample
-            if (0 == _wcsicmp(argv[i], L"--no-skip-first-sample")) {
-                m_bSkipFirstSample = false;
+            // --duplicate-channels
+            if (0 == _wcsicmp(argv[i], L"--duplicate-channels")) {
+                m_bDuplicateChannels = true;
+                continue;
+            }
+
+            // --force-mono-to-stereo
+            if (0 == _wcsicmp(argv[i], L"--force-mono-to-stereo")) {
+                m_bForceMonoToStereo = true;
+                continue;
+            }
+
+            // --skip-first-sample
+            if (0 == _wcsicmp(argv[i], L"--skip-first-sample")) {
+                m_bSkipFirstSample = true;
                 continue;
             }
 

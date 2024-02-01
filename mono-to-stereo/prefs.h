@@ -5,6 +5,8 @@ public:
     IMMDevice *m_pMMInDevice;
     IMMDevice *m_pMMOutDevice;
     int m_iBufferMs;
+    bool m_bDuplicateChannels;
+    bool m_bForceMonoToStereo;
     bool m_bSkipFirstSample;
 
     // set hr to S_FALSE to abort but return success

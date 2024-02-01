@@ -53,6 +53,8 @@ int do_everything(int argc, LPCWSTR argv[]) {
     threadArgs.pMMInDevice = prefs.m_pMMInDevice;
     threadArgs.pMMOutDevice = prefs.m_pMMOutDevice;
     threadArgs.iBufferMs = prefs.m_iBufferMs;
+    threadArgs.bDuplicateChannels = prefs.m_bDuplicateChannels;
+    threadArgs.bForceMonoToStereo = prefs.m_bForceMonoToStereo;
     threadArgs.bSkipFirstSample = prefs.m_bSkipFirstSample;
     threadArgs.hStartedEvent = hStartedEvent;
     threadArgs.hStopEvent = hStopEvent;

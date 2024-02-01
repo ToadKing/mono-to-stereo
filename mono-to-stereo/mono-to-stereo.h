@@ -13,6 +13,8 @@ struct LoopbackCaptureThreadFunctionArguments {
     IMMDevice *pMMInDevice;
     IMMDevice *pMMOutDevice;
     int iBufferMs;
+    bool bDuplicateChannels;
+    bool bForceMonoToStereo;
     bool bSkipFirstSample;
     HANDLE hStartedEvent;
     HANDLE hStopEvent;

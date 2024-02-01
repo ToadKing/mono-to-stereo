@@ -7,6 +7,8 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMInDevice,
     IMMDevice* pMMOutDevice,
     int iBufferMs,
+    bool bDuplicateChannels,
+    bool bForceMonoToStereo,
     bool bSkipFirstSample,
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
@@ -28,6 +30,8 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
         pArgs->pMMInDevice,
         pArgs->pMMOutDevice,
         pArgs->iBufferMs,
+        pArgs->bDuplicateChannels,
+        pArgs->bForceMonoToStereo,
         pArgs->bSkipFirstSample,
         pArgs->hStartedEvent,
         pArgs->hStopEvent,
@@ -37,29 +41,130 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
     return 0;
 }
 
-void stridecpy(void *dst, const void *src, size_t size, UINT stride, UINT skip, INT fill) {
 
-    if (skip == 0) {
-        memcpy(dst, src, size);
+void valcpy(BYTE* pOutData, UINT nOutBytes, BYTE* pData, UINT nBytes) {
+    if (nOutBytes >= nBytes) {
+        for (UINT i = 0; i < nBytes; i++) {
+            pOutData[i] = pData[i];
+        }
+        if (nOutBytes > nBytes) {
+            UINT leftShift = nOutBytes - nBytes;
+            for (UINT i = 0; i < leftShift; i++) {
+                pOutData[leftShift + i] = 0;
+            }
+        }
+    }
+    else { // (nOutBytes < nBytes)
+        for (UINT i = 0; i < nOutBytes; i++) {
+            pOutData[i] = pData[i];
+        }
+    }
+}
+
+
+void sndcpy(void *dst, WAVEFORMATEX* pwfxOut, const void *src, WAVEFORMATEX* pwfx, UINT nNumFrames, bool bDuplicateChannels) {
+
+    // does not support converting between sample different sample rates, would require some form of interpolation??
+
+    if (nNumFrames == 0 || pwfx->nSamplesPerSec != pwfxOut->nSamplesPerSec) {
+        // do nothing
         return;
     }
+    else if (pwfx->nChannels == pwfxOut->nChannels && pwfx->wBitsPerSample == pwfxOut->wBitsPerSample) {
+        // same format, raw copy
+        memcpy(dst, src, nNumFrames * pwfx->nBlockAlign);
+        return;
+    }
+    else {
+        BYTE *in = (BYTE *)src;
+        BYTE *out = (BYTE *)dst;
 
-    size_t chunk = 0;
-    size_t count = 0;
-    size_t offset = 0;
+        UINT nBytes = pwfx->wBitsPerSample / 8;
+        UINT nOutBytes = pwfxOut->wBitsPerSample / 8;
 
-    char *out = (char *)dst;
-    char *in = (char *)src;
+        std::vector<BYTE> channel(nOutBytes);
 
-    while (count < size) {
-        if (count > 0) {
-            memset(out + offset, fill, skip);
-            offset += skip;
-        }
+        BYTE *pOutData, *pData;
+        UINT nFrameOffset = 0;
+        while (nFrameOffset < nNumFrames) {
+            pData = &in[nFrameOffset * pwfx->nBlockAlign];
+            pOutData = &out[nFrameOffset * pwfxOut->nBlockAlign];
 
-        chunk = 0;
-        while (count < size && chunk++ < stride) {
-            out[offset++] = in[count++];
+            // copy first channel always
+            valcpy(pOutData, nOutBytes, pData, nBytes);
+
+            switch (pwfx->nChannels) {
+            case 1: // mono
+                if (!bDuplicateChannels) {
+                    break;
+                }
+
+                switch (pwfxOut->nChannels) {
+                case 2: // stereo
+                    // copy out L to out R
+                    for (UINT i = 0; i < nOutBytes; i++) {
+                        pOutData[nOutBytes + i] = pOutData[i];
+                    }
+                case 4: // quad
+                case 6: // 5.1
+                case 8: // 7.1
+                    // copy out L to R, RL, RR
+                    UINT nTotal = nOutBytes * 3;
+                    for (UINT i = 0; i < nTotal; i++) {
+                        pOutData[nOutBytes + i] = pOutData[i % nOutBytes];
+                    }
+                    // fill remainder of channels with blank
+                    UINT nZero = nOutBytes * (pwfxOut->nChannels - 4);
+                    for (UINT i = 0; i < nZero; i++) {
+                        pOutData[nOutBytes + nTotal + i] = 0;
+                    }
+                    break;
+                }
+                break;
+            case 2: // stereo
+                switch (pwfxOut->nChannels) {
+                case 1: // mono
+                    // average in R to out L, R 
+                    valcpy(channel.data(), nOutBytes, pData + nBytes, nBytes);
+
+                    // ? ? ? TODO: take average of both L and temp R value and overwrite out L
+
+                    break;
+                case 2: // stereo
+                case 4: // quad
+                case 6: // 5.1
+                case 8: // 7.1
+                    // copy in R to out R
+                    valcpy(pOutData + nOutBytes, nOutBytes, pData + nBytes, nBytes);
+
+                    if (!bDuplicateChannels || pwfxOut->nChannels < 4) {
+                        break;
+                    }
+
+                    // copy out L, R to out RL, RR
+                    UINT nOffset = nOutBytes * 2;
+                    UINT nTotal = nOutBytes * 2;
+                    for (UINT i = 0; i < nTotal; i++) {
+                        pOutData[nOffset + i] = pOutData[i];
+                    }
+                    // fill remainder of channels with blank
+                    UINT nZero = nOutBytes * (pwfxOut->nChannels - 4);
+                    for (UINT i = 0; i < nZero; i++) {
+                        pOutData[nOffset + nTotal + i] = 0;
+                    }
+                    break;
+                }
+                break;
+                break;
+            case 4: // quad
+                break;
+            case 6: // 5.1
+                break;
+            case 8: // 7.1
+                break;
+            }
+
+            nFrameOffset++;
         }
     }
 }
@@ -68,6 +173,8 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMInDevice,
     IMMDevice* pMMOutDevice,
     int iBufferMs,
+    bool bDuplicateChannels,
+    bool bForceMonoToStereo,
     bool bSkipFirstSample,
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
@@ -105,8 +212,8 @@ HRESULT LoopbackCapture(
     }
     CoTaskMemFreeOnExit freeMixFormat(pwfx);
 
-    if (pwfx->nChannels != 1) {
-        ERR(L"device doesn't have 1 channel, has %d", pwfx->nChannels);
+    if (bForceMonoToStereo && pwfx->nChannels != 1) {
+        ERR(L"capture device doesn't have 1 channel, has %d", pwfx->nChannels);
         return E_UNEXPECTED;
     }
 
@@ -125,8 +232,6 @@ HRESULT LoopbackCapture(
     }
 
     pwfx->nBlockAlign = pwfx->nChannels * pwfx->wBitsPerSample / 8;
-
-    UINT32 nBlockAlign = pwfx->nBlockAlign;
     *pnFrames = 0;
 
     // call IAudioClient::Initialize
@@ -182,12 +287,12 @@ HRESULT LoopbackCapture(
     }
     AudioClientStopOnExit stopAudioClient(pAudioClient);
 
-    // update format for stereo conversion
-    pwfx->nChannels *= 2; // from mono to stereo
-    pwfx->nSamplesPerSec /= 2; // from 96000 -> 48000
-    pwfx->nBlockAlign *= 2;
-
-    nBlockAlign = pwfx->nBlockAlign;
+    if (bForceMonoToStereo) {
+        // update format for stereo conversion
+        pwfx->nChannels *= 2; // from mono to stereo
+        pwfx->nSamplesPerSec /= 2;
+        pwfx->nBlockAlign *= 2;
+    }
 
     // set up output device
     IAudioClient* pAudioOutClient;
@@ -202,32 +307,29 @@ HRESULT LoopbackCapture(
     }
     ReleaseOnExit releaseAudioOutClient(pAudioOutClient);
 
-
-    UINT upMix = 0;
     WAVEFORMATEX* pwfxOut = NULL;
     hr = pAudioOutClient->IsFormatSupported(AUDCLNT_SHAREMODE_SHARED, pwfx, &pwfxOut);
-    if (hr != S_OK) {
-        // S_FALSE or FAILED(hr)
-        if (pwfx->wBitsPerSample == pwfxOut->wBitsPerSample &&
-            pwfx->nSamplesPerSec == pwfxOut->nSamplesPerSec &&
-            pwfxOut->nChannels > pwfx->nChannels) {
-
-            upMix = (UINT)pwfxOut->nChannels;
-        }
-        else {
-            LOG(L" Channels %ld -> %ld", pwfx->nChannels, pwfxOut->nChannels);
-            LOG(L" BitsPerSample %ld -> %ld", pwfx->wBitsPerSample, pwfxOut->wBitsPerSample);
-            LOG(L" SamplesPerSec %ld -> %ld", pwfx->nSamplesPerSec, pwfxOut->nSamplesPerSec);
-            ERR(L"IAudioClient::IsFormatSupported failed (output): hr = 0x%08x", hr);
-            return hr;
-        }
-    }
-    else {
+    if (hr == S_OK) {
         pwfxOut = pwfx;
     }
+    LOG(L" Channels %ld -> %ld", pwfx->nChannels, pwfxOut->nChannels);
+    LOG(L" BitsPerSample %ld -> %ld", pwfx->wBitsPerSample, pwfxOut->wBitsPerSample);
+    LOG(L" SamplesPerSec %ld -> %ld", pwfx->nSamplesPerSec, pwfxOut->nSamplesPerSec);
+    if (FAILED(hr))
+    {
+        ERR(L"IAudioClient::IsFormatSupported failed (output): hr = 0x%08x", hr);
+        return hr;
+    }
 
-    UINT32 OutputBlockAlign = pwfxOut->nBlockAlign;
-    UINT32 SkipBlockAlign = OutputBlockAlign - nBlockAlign;
+    if (pwfx->nSamplesPerSec != pwfxOut->nSamplesPerSec) {
+        ERR(L"cannot convert between sample rates");
+        return E_UNEXPECTED;
+    }
+
+    if (pwfx->nChannels >= 4) {
+        ERR(L"cannot convert quaud, 5.1 opr 7.1 channel capture audio");
+        return E_UNEXPECTED;
+    }
 
     hr = pAudioOutClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED, 0,
@@ -289,7 +391,7 @@ HRESULT LoopbackCapture(
 
     std::vector<BYTE> lastSample;
     if (bSkipFirstSample) {
-        lastSample.resize(nBlockAlign);
+        lastSample.resize(pwfx->nBlockAlign);
     }
 
     while (!bDone) {
@@ -357,8 +459,7 @@ HRESULT LoopbackCapture(
             }
 
             // this is halved because nNumFramesToRead came from a mono source
-            UINT32 nNumFramesToWrite = nNumFramesToRead / 2;
-            LONG lBytesWeRead = nNumFramesToWrite * nBlockAlign;
+            UINT32 nNumFramesToWrite = (bForceMonoToStereo ? nNumFramesToRead / 2 : nNumFramesToRead);
 
             for (;;) {
                 hr = pRenderClient->GetBuffer(nNumFramesToWrite, &pOutData);
@@ -376,13 +477,14 @@ HRESULT LoopbackCapture(
                 break;
             }
 
+            //static_cast<size_t>(lBytesWeRead - pwfx->nBlockAlign)
             if (bSkipFirstSample) {
-                stridecpy(pOutData, lastSample.data(), nBlockAlign, nBlockAlign, SkipBlockAlign, 0);
-                stridecpy(pOutData + OutputBlockAlign, pData, static_cast<size_t>(lBytesWeRead - nBlockAlign), nBlockAlign, SkipBlockAlign, 0);
-                memcpy(lastSample.data(), pData + lBytesWeRead - nBlockAlign, nBlockAlign);
+                sndcpy(pOutData, pwfxOut, lastSample.data(), pwfx,1, bDuplicateChannels);
+                sndcpy(pOutData + pwfxOut->nBlockAlign, pwfxOut, pData, pwfx, nNumFramesToWrite - 1, bDuplicateChannels);
+                memcpy(lastSample.data(), pData + ((nNumFramesToWrite - 1) * pwfx->nBlockAlign), pwfx->nBlockAlign);
             }
             else {
-                stridecpy(pOutData, pData, lBytesWeRead, nBlockAlign, SkipBlockAlign, 0);
+                sndcpy(pOutData, pwfxOut, pData, pwfx, nNumFramesToWrite, bDuplicateChannels);
             }
 
             hr = pRenderClient->ReleaseBuffer(nNumFramesToWrite, 0);
