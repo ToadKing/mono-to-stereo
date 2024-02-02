@@ -30,7 +30,7 @@ class CancelWaitableTimerOnExit {
 public:
     CancelWaitableTimerOnExit(HANDLE h) : m_h(h) {}
     ~CancelWaitableTimerOnExit() {
-        if (!CancelWaitableTimer(m_h)) {
+        if (m_h && !CancelWaitableTimer(m_h)) {
             ERR(L"CancelWaitableTimer failed: last error is %d", GetLastError());
         }
     }
