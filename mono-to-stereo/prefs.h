@@ -8,6 +8,9 @@ public:
     WCHAR szOutName[FILENAME_MAX];
     int m_iBufferMs;
     bool m_bCaptureRenderer;
+    bool m_bSwapChannels;
+    bool m_bCopyToRight;
+    bool m_bCopyToLeft;
     bool m_bDuplicateChannels;
     bool m_bForceMonoToStereo;
     bool m_bSkipFirstSample;

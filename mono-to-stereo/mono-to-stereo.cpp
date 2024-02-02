@@ -10,6 +10,9 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMOutDevice,
     int iBufferMs,
     bool bCaptureRenderer,
+    bool bSwapChannels,
+    bool bCopyToRight,
+    bool bCopyToLeft,
     bool bDuplicateChannels,
     bool bForceMonoToStereo,
     bool bSkipFirstSample,
@@ -34,15 +37,33 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
         pArgs->pMMOutDevice,
         pArgs->iBufferMs,
         pArgs->bCaptureRenderer,
+        pArgs->bSwapChannels,
+        pArgs->bCopyToRight,
+        pArgs->bCopyToLeft,
         pArgs->bDuplicateChannels,
         pArgs->bForceMonoToStereo,
         pArgs->bSkipFirstSample,
         pArgs->hStartedEvent,
         pArgs->hStopEvent,
         &pArgs->nFrames
-        );
+    );
 
     return 0;
+}
+
+void ProcessSample(BYTE* pData, BYTE* tmp, UINT nBytes, bool bSwapChannels, bool bCopyToRight, bool bCopyToLeft) {
+    if (bSwapChannels) {
+        memcpy(tmp, pData, nBytes);
+        memcpy(pData, pData + nBytes, nBytes);
+        memcpy(pData + nBytes, tmp, nBytes);
+    }
+    else if (bCopyToRight) {
+        memcpy(pData + nBytes, pData, nBytes);
+    }
+    else if (bCopyToLeft) {
+        memcpy(pData, pData + nBytes, nBytes);
+    }
+
 }
 
 HRESULT LoopbackCapture(
@@ -50,6 +71,9 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMOutDevice,
     int iBufferMs,
     bool bCaptureRenderer,
+    bool bSwapChannels,
+    bool bCopyToRight,
+    bool bCopyToLeft,
     bool bDuplicateChannels,
     bool bForceMonoToStereo,
     bool bSkipFirstSample,
@@ -296,10 +320,13 @@ HRESULT LoopbackCapture(
 
     bool bDone = false;
 
-    std::vector<BYTE> lastSample;
+    std::vector<BYTE> lastBlock;
     if (bSkipFirstSample) {
-        lastSample.resize(pwfx->nBlockAlign);
+        lastBlock.resize(pwfx->nBlockAlign);
     }
+
+    UINT nBytes = pwfx->wBitsPerSample / 8;
+    std::vector<BYTE> tmpSample(nBytes);
 
     while (!bDone) {
         dwWaitResult = WaitForMultipleObjects(
@@ -364,6 +391,21 @@ HRESULT LoopbackCapture(
                 ERR(L"frames to output is odd (%u), will miss the last sample after %u frames", nNumFramesToRead, *pnFrames);
             }
 
+            // pre-process audio data
+            if (pwfx->nChannels >= 2 && (bSwapChannels || bCopyToRight || bCopyToLeft)) {
+                for (UINT i = 0; i < nNumFramesToRead; i++) {
+                    switch (pwfx->nChannels) {
+                    case 8:
+                    case 6:
+                    case 4:
+                        ProcessSample(pData + (nBytes * 2), tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
+                    case 2:
+                        ProcessSample(pData, tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
+                        break;
+                    }
+                }
+            }
+
             // this is halved because nNumFramesToRead came from a mono source
             UINT32 nNumFramesToWrite = (bForceMonoToStereo ? nNumFramesToRead / 2 : nNumFramesToRead);
 
@@ -385,9 +427,9 @@ HRESULT LoopbackCapture(
 
             //static_cast<size_t>(lBytesWeRead - pwfx->nBlockAlign)
             if (bSkipFirstSample) {
-                sndcpy(pOutData, pwfxOut, lastSample.data(), pwfx, 1, bDuplicateChannels);
+                sndcpy(pOutData, pwfxOut, lastBlock.data(), pwfx, 1, bDuplicateChannels);
                 sndcpy(pOutData + pwfxOut->nBlockAlign, pwfxOut, pData, pwfx, nNumFramesToWrite - 1, bDuplicateChannels);
-                memcpy(lastSample.data(), pData + ((nNumFramesToWrite - 1) * pwfx->nBlockAlign), pwfx->nBlockAlign);
+                memcpy(lastBlock.data(), pData + ((nNumFramesToWrite - 1) * pwfx->nBlockAlign), pwfx->nBlockAlign);
             }
             else {
                 sndcpy(pOutData, pwfxOut, pData, pwfx, nNumFramesToWrite, bDuplicateChannels);

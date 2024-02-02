@@ -27,6 +27,9 @@ void usage(LPCWSTR exe) {
         L"    --in-device captures from the specified device to capture (\"Digital Audio Interface (USB Digital Audio)\" if omitted)\n"
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
+        L"    --swap-channels swap all available left and right channels (cannot enable if already copying to right or left)\n"
+        L"    --copy-to-right copy left channel data to right channel (cannot enable if already swapping or copying to left)\n"
+        L"    --copy-to-left copy right channel data to left channel (cannot enable if already swapping or copying to right)\n"
         L"    --duplicate-channels duplicate channel data to other channels\n"
         L"    --force-mono-to-stereo force mono capture audio to be treated as stereo without conversion\n"
         L"    --skip-first-sample skip the first channel sample",
@@ -39,6 +42,9 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
     , m_pMMOutDevice(NULL)
     , m_iBufferMs(DEFAULT_BUFFER_MS)
     , m_bCaptureRenderer(false)
+    , m_bSwapChannels(false)
+    , m_bCopyToRight(false)
+    , m_bCopyToLeft(false)
     , m_bDuplicateChannels(false)
     , m_bForceMonoToStereo(false)
     , m_bSkipFirstSample(false)
@@ -138,6 +144,39 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 }
 
                 m_bCaptureRenderer = true;
+                continue;
+            }
+
+            // --swap-channels
+            if (0 == _wcsicmp(argv[i], L"--swap-channels")) {
+                if (m_bCopyToRight || m_bCopyToLeft) {
+                    ERR(L"%s", L"--copy-to-right or --copy-to-left is already enabled");
+                    hr = E_INVALIDARG;
+                }
+
+                m_bSwapChannels = true;
+                continue;
+            }
+
+            // --copy-to-right
+            if (0 == _wcsicmp(argv[i], L"--copy-to-right")) {
+                if (m_bSwapChannels || m_bCopyToLeft) {
+                    ERR(L"%s", L"--swap-channels or --copy-to-left is already enabled");
+                    hr = E_INVALIDARG;
+                }
+
+                m_bCopyToRight = true;
+                continue;
+            }
+
+            // --copy-to-left
+            if (0 == _wcsicmp(argv[i], L"--copy-to-left")) {
+                if (m_bSwapChannels || m_bCopyToRight) {
+                    ERR(L"%s", L"--swap-channels or --copy-to-right is already enabled");
+                    hr = E_INVALIDARG;
+                }
+
+                m_bCopyToLeft = true;
                 continue;
             }
 
