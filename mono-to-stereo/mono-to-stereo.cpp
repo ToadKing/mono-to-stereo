@@ -48,6 +48,14 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
 }
 
 void ProcessSample(BYTE* pData, BYTE* tmp, UINT nBytes, CPreProcess &preProcess) {
+    if (preProcess.m_bZeroLeft) {
+        memset(pData, 0, nBytes);
+    }
+
+    if (preProcess.m_bZeroRight) {
+        memset(pData + nBytes, 0, nBytes);
+    }
+
     if (preProcess.m_bSwapChannels) {
         memcpy(tmp, pData, nBytes);
         memcpy(pData, pData + nBytes, nBytes);
@@ -58,14 +66,6 @@ void ProcessSample(BYTE* pData, BYTE* tmp, UINT nBytes, CPreProcess &preProcess)
     }
     else if (preProcess.m_bCopyToLeft) {
         memcpy(pData, pData + nBytes, nBytes);
-    }
-
-    if (preProcess.m_bZeroLeft) {
-        memset(pData, 0, nBytes);
-    }
-
-    if (preProcess.m_bZeroRight) {
-        memset(pData + nBytes, 0, nBytes);
     }
 }
 

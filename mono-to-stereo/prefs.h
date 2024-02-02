@@ -2,11 +2,11 @@
 
 class CPreProcess {
 public:
+    bool m_bZeroLeft;
+    bool m_bZeroRight;
     bool m_bSwapChannels;
     bool m_bCopyToRight;
     bool m_bCopyToLeft;
-    bool m_bZeroLeft;
-    bool m_bZeroRight;
 
     CPreProcess();
 

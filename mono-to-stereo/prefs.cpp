@@ -18,8 +18,9 @@ void usage(LPCWSTR exe) {
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
-        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex]  [--buffer-size 128] [--force-mono-to-stereo] [--skip-first-sample]"
-        L" [--zero-left] [--zero-right] [--swap-channels] [--copy-to-right] [--copy-to-left] [--duplicate-channels]\n"
+        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex]"
+        L" [--buffer-size 128] [--duplicate-channels] [--force-mono-to-stereo] [--skip-first-sample]"
+        L" [--zero-left] [--zero-right] [--swap-channels] [--copy-to-right] [--copy-to-left] \n"
         L"\n"
         L"    -? prints this message.\n"
         L"    --list-devices displays the long names of all active capture and render devices.\n"
@@ -30,27 +31,27 @@ void usage(LPCWSTR exe) {
         L"    --duplicate-channels duplicate channel data to other channels"
         L"    --force-mono-to-stereo force mono capture audio to be treated as stereo without conversion\n"
         L"    --skip-first-sample skip the first channel sample\n"
+        L"    --zero-left zero out left channel"
+        L"    --zero-right zero out right channel"
         L"    --swap-channels swap all available left and right channels (cannot enable if already copying to right or left)\n"
         L"    --copy-to-right copy left channel data to right channel (cannot enable if already swapping or copying to left)\n"
         L"    --copy-to-left copy right channel data to left channel (cannot enable if already swapping or copying to right)\n"
-        L"    --zero-left zero out left channel"
-        L"    --zero-right zero out right channel"
         VERSION, exe, exe, exe, DEFAULT_BUFFER_MS
     );
 }
 
 
 CPreProcess::CPreProcess()
-    : m_bSwapChannels(false)
+    : m_bZeroRight(false)
+    , m_bZeroLeft(false)
+    , m_bSwapChannels(false)
     , m_bCopyToRight(false)
     , m_bCopyToLeft(false)
-    , m_bZeroRight(false)
-    , m_bZeroLeft(false)
 { }
 
 
 bool CPreProcess::IsRequired() {
-    return (m_bSwapChannels || m_bCopyToRight || m_bCopyToLeft || m_bZeroLeft || m_bZeroRight);
+    return (m_bZeroLeft || m_bZeroRight|| m_bSwapChannels || m_bCopyToRight || m_bCopyToLeft);
 }
 
 
@@ -179,6 +180,18 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 continue;
             }
 
+            // --zero-left
+            if (0 == _wcsicmp(argv[i], L"--zero-left")) {
+                m_preProcess.m_bZeroLeft = true;
+                continue;
+            }
+
+            // --zero-right
+            if (0 == _wcsicmp(argv[i], L"--zero-right")) {
+                m_preProcess.m_bZeroRight = true;
+                continue;
+            }
+
             // --swap-channels
             if (0 == _wcsicmp(argv[i], L"--swap-channels")) {
                 if (m_preProcess.m_bCopyToRight || m_preProcess.m_bCopyToLeft) {
@@ -209,18 +222,6 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 }
 
                 m_preProcess.m_bCopyToLeft = true;
-                continue;
-            }
-
-            // --zero-left
-            if (0 == _wcsicmp(argv[i], L"--zero-left")) {
-                m_preProcess.m_bZeroLeft = true;
-                continue;
-            }
-
-            // --zero-right
-            if (0 == _wcsicmp(argv[i], L"--zero-right")) {
-                m_preProcess.m_bZeroRight = true;
                 continue;
             }
 
