@@ -108,7 +108,7 @@ int do_everything(int argc, LPCWSTR argv[]) {
             return -__LINE__;
         }
 
-        LOG(L"%s", L"Press Enter to quit...");
+        LOG(L"%s", L"Press Enter to quit...\n");
 
         FlushConsoleInputBuffer(hStdIn);
 
