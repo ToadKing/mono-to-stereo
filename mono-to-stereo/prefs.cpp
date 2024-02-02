@@ -1,14 +1,16 @@
 // prefs.cpp
 
+#pragma warning( disable : 4996 )
+
 #include "common.h"
 
 #define DEFAULT_BUFFER_MS 64
 
 void usage(LPCWSTR exe);
-HRESULT get_default_device(IMMDevice **ppMMDevice);
+HRESULT get_default_device(EDataFlow direction, IMMDevice **ppMMDevice, LPWSTR szOutName);
 HRESULT list_devices();
 HRESULT list_devices_with_direction(EDataFlow direction, const wchar_t *direction_label);
-HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice **ppMMDevice);
+HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice **ppMMDevice, LPWSTR szOutName);
 
 void usage(LPCWSTR exe) {
     LOG(
@@ -16,10 +18,12 @@ void usage(LPCWSTR exe) {
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
-        L"%ls [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex] [--buffer-size 128] [--no-skip-first-sample]\n"
+        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex]"
+        L" [--buffer-size 128] [--swap-channels] [--copy-to-right] [--copy-to-left] [--duplicate-channels] [--force-mono-to-stereo] [--skip-first-sample]\n"
         L"\n"
         L"    -? prints this message.\n"
         L"    --list-devices displays the long names of all active capture and render devices.\n"
+        L"    --capture-renderer captures from a render device instead (needs to be set before --in-device)\n"
         L"    --in-device captures from the specified device to capture (\"Digital Audio Interface (USB Digital Audio)\" if omitted)\n"
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
@@ -34,6 +38,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
     : m_pMMInDevice(NULL)
     , m_pMMOutDevice(NULL)
     , m_iBufferMs(DEFAULT_BUFFER_MS)
+    , m_bCaptureRenderer(false)
     , m_bDuplicateChannels(false)
     , m_bForceMonoToStereo(false)
     , m_bSkipFirstSample(false)
@@ -76,7 +81,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                     return;
                 }
 
-                hr = get_specific_device(argv[i], eCapture, &m_pMMInDevice);
+                hr = get_specific_device(argv[i], (m_bCaptureRenderer ? eRender : eCapture), &m_pMMInDevice, szInName);
                 if (FAILED(hr)) {
                     return;
                 }
@@ -98,7 +103,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                     return;
                 }
 
-                hr = get_specific_device(argv[i], eRender, &m_pMMOutDevice);
+                hr = get_specific_device(argv[i], eRender, &m_pMMOutDevice, szOutName);
                 if (FAILED(hr)) {
                     return;
                 }
@@ -121,6 +126,18 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                     return;
                 }
 
+                continue;
+            }
+
+            // --capture-renderer
+            if (0 == _wcsicmp(argv[i], L"--capture-renderer")) {
+                if (NULL != m_pMMInDevice) {
+                    ERR(L"%s", L"--capture-renderer is required before --in-device is selected");
+                    hr = E_INVALIDARG;
+                    return;
+                }
+
+                m_bCaptureRenderer = true;
                 continue;
             }
 
@@ -149,7 +166,12 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
 
         // open default device if not specified
         if (NULL == m_pMMInDevice) {
-            hr = get_specific_device(L"Digital Audio Interface (USB Digital Audio)", eCapture, &m_pMMInDevice);
+            if (m_bForceMonoToStereo && !m_bCaptureRenderer) {
+                hr = get_specific_device(L"Digital Audio Interface (USB Digital Audio)", eCapture, &m_pMMInDevice, szInName);
+            }
+            else {
+                hr = get_default_device((m_bCaptureRenderer ? eRender : eCapture), &m_pMMInDevice, szInName);
+            }
             if (FAILED(hr)) {
                 return;
             }
@@ -157,11 +179,14 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
 
         // open default device if not specified
         if (NULL == m_pMMOutDevice) {
-            hr = get_default_device(&m_pMMOutDevice);
+            hr = get_default_device(eRender, &m_pMMOutDevice, szOutName);
             if (FAILED(hr)) {
                 return;
             }
         }
+
+        //if (m_bCaptureRenderer && 
+        //    )
     }
 }
 
@@ -175,7 +200,7 @@ CPrefs::~CPrefs() {
     }
 }
 
-HRESULT get_default_device(IMMDevice **ppMMDevice) {
+HRESULT get_default_device(EDataFlow direction, IMMDevice **ppMMDevice, LPWSTR szOutName) {
     HRESULT hr = S_OK;
     IMMDeviceEnumerator *pMMDeviceEnumerator;
 
@@ -191,11 +216,38 @@ HRESULT get_default_device(IMMDevice **ppMMDevice) {
     }
     ReleaseOnExit releaseMMDeviceEnumerator(pMMDeviceEnumerator);
 
-    // get the default render endpoint
-    hr = pMMDeviceEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, ppMMDevice);
+    // get the default endpoint
+    hr = pMMDeviceEnumerator->GetDefaultAudioEndpoint(direction, eConsole, ppMMDevice);
     if (FAILED(hr)) {
         ERR(L"IMMDeviceEnumerator::GetDefaultAudioEndpoint failed: hr = 0x%08x", hr);
         return hr;
+    }
+
+    // open the property store on that device
+    IPropertyStore *pPropertyStore;
+    hr = (*ppMMDevice)->OpenPropertyStore(STGM_READ, &pPropertyStore);
+    if (FAILED(hr)) {
+        ERR(L"IMMDevice::OpenPropertyStore failed: hr = 0x%08x", hr);
+        return hr;
+    }
+    ReleaseOnExit releasePropertyStore(pPropertyStore);
+
+    // get the long name property
+    PROPVARIANT pv; PropVariantInit(&pv);
+    hr = pPropertyStore->GetValue(PKEY_Device_FriendlyName, &pv);
+    if (FAILED(hr)) {
+        ERR(L"IPropertyStore::GetValue failed: hr = 0x%08x", hr);
+        return hr;
+    }
+    PropVariantClearOnExit clearPv(&pv);
+
+    if (VT_LPWSTR != pv.vt) {
+        ERR(L"PKEY_Device_FriendlyName variant type is %u - expected VT_LPWSTR", pv.vt);
+        return E_UNEXPECTED;
+    }
+
+    if (szOutName) {
+        wcscpy(szOutName, pv.pwszVal);
     }
 
     return S_OK;
@@ -311,7 +363,7 @@ BOOL is_numeric(LPCWSTR szLongName, LPLONG lpOut) {
     return FALSE;
 }
 
-HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice **ppMMDevice) {
+HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice **ppMMDevice, LPWSTR szOutName) {
     HRESULT hr = S_OK;
 
     *ppMMDevice = NULL;
@@ -394,6 +446,11 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
             if (index == (i + 1)) {
                 *ppMMDevice = pMMDevice;
                 pMMDevice->AddRef();
+
+                if (szOutName) {
+                    wcscpy(szOutName, pv.pwszVal);
+                }
+
                 // exit loop if searching by index
                 break;
             }
@@ -403,12 +460,17 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
             if (NULL == *ppMMDevice) {
                 *ppMMDevice = pMMDevice;
                 pMMDevice->AddRef();
+
+                if (szOutName) {
+                    wcscpy(szOutName, pv.pwszVal);
+                }
             }
             else {
                 ERR(L"Found (at least) two devices named %ls", szLongName);
                 return E_UNEXPECTED;
             }
         }
+
     }
 
     if (NULL == *ppMMDevice) {

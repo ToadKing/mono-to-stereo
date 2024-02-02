@@ -42,7 +42,7 @@ class CloseHandleOnExit {
 public:
     CloseHandleOnExit(HANDLE h) : m_h(h) {}
     ~CloseHandleOnExit() {
-        if (!CloseHandle(m_h)) {
+        if (m_h && !CloseHandle(m_h)) {
             ERR(L"CloseHandle failed: last error is %d", GetLastError());
         }
     }
