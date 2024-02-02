@@ -54,9 +54,7 @@ int do_everything(int argc, LPCWSTR argv[]) {
     threadArgs.pMMOutDevice = prefs.m_pMMOutDevice;
     threadArgs.iBufferMs = prefs.m_iBufferMs;
     threadArgs.bCaptureRenderer = prefs.m_bCaptureRenderer;
-    threadArgs.bSwapChannels = prefs.m_bSwapChannels;
-    threadArgs.bCopyToRight = prefs.m_bCopyToRight;
-    threadArgs.bCopyToLeft = prefs.m_bCopyToLeft;
+    threadArgs.preProcess = prefs.m_preProcess;
     threadArgs.bDuplicateChannels = prefs.m_bDuplicateChannels;
     threadArgs.bForceMonoToStereo = prefs.m_bForceMonoToStereo;
     threadArgs.bSkipFirstSample = prefs.m_bSkipFirstSample;
@@ -64,8 +62,8 @@ int do_everything(int argc, LPCWSTR argv[]) {
     threadArgs.hStopEvent = hStopEvent;
     threadArgs.nFrames = 0;
 
-    LOG(L"<< %ls", prefs.szInName);
-    LOG(L">> %ls", prefs.szOutName);
+    LOG(L"<< %ls", prefs.m_szInName);
+    LOG(L">> %ls", prefs.m_szOutName);
 
     HANDLE hThread = CreateThread(
         NULL, 0,

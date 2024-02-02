@@ -18,8 +18,8 @@ void usage(LPCWSTR exe) {
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
-        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex]"
-        L" [--buffer-size 128] [--swap-channels] [--copy-to-right] [--copy-to-left] [--duplicate-channels] [--force-mono-to-stereo] [--skip-first-sample]\n"
+        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex]  [--buffer-size 128] [--force-mono-to-stereo] [--skip-first-sample]"
+        L" [--zero-left] [--zero-right] [--swap-channels] [--copy-to-right] [--copy-to-left] [--duplicate-channels]\n"
         L"\n"
         L"    -? prints this message.\n"
         L"    --list-devices displays the long names of all active capture and render devices.\n"
@@ -27,24 +27,38 @@ void usage(LPCWSTR exe) {
         L"    --in-device captures from the specified device to capture (\"Digital Audio Interface (USB Digital Audio)\" if omitted)\n"
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
+        L"    --duplicate-channels duplicate channel data to other channels"
+        L"    --force-mono-to-stereo force mono capture audio to be treated as stereo without conversion\n"
+        L"    --skip-first-sample skip the first channel sample\n"
         L"    --swap-channels swap all available left and right channels (cannot enable if already copying to right or left)\n"
         L"    --copy-to-right copy left channel data to right channel (cannot enable if already swapping or copying to left)\n"
         L"    --copy-to-left copy right channel data to left channel (cannot enable if already swapping or copying to right)\n"
-        L"    --duplicate-channels duplicate channel data to other channels\n"
-        L"    --force-mono-to-stereo force mono capture audio to be treated as stereo without conversion\n"
-        L"    --skip-first-sample skip the first channel sample",
+        L"    --zero-left zero out left channel"
+        L"    --zero-right zero out right channel"
         VERSION, exe, exe, exe, DEFAULT_BUFFER_MS
     );
 }
+
+
+CPreProcess::CPreProcess()
+    : m_bSwapChannels(false)
+    , m_bCopyToRight(false)
+    , m_bCopyToLeft(false)
+    , m_bZeroRight(false)
+    , m_bZeroLeft(false)
+{ }
+
+
+bool CPreProcess::IsRequired() {
+    return (m_bSwapChannels || m_bCopyToRight || m_bCopyToLeft || m_bZeroLeft || m_bZeroRight);
+}
+
 
 CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
     : m_pMMInDevice(NULL)
     , m_pMMOutDevice(NULL)
     , m_iBufferMs(DEFAULT_BUFFER_MS)
     , m_bCaptureRenderer(false)
-    , m_bSwapChannels(false)
-    , m_bCopyToRight(false)
-    , m_bCopyToLeft(false)
     , m_bDuplicateChannels(false)
     , m_bForceMonoToStereo(false)
     , m_bSkipFirstSample(false)
@@ -87,7 +101,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                     return;
                 }
 
-                hr = get_specific_device(argv[i], (m_bCaptureRenderer ? eRender : eCapture), &m_pMMInDevice, szInName);
+                hr = get_specific_device(argv[i], (m_bCaptureRenderer ? eRender : eCapture), &m_pMMInDevice, m_szInName);
                 if (FAILED(hr)) {
                     return;
                 }
@@ -109,7 +123,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                     return;
                 }
 
-                hr = get_specific_device(argv[i], eRender, &m_pMMOutDevice, szOutName);
+                hr = get_specific_device(argv[i], eRender, &m_pMMOutDevice, m_szOutName);
                 if (FAILED(hr)) {
                     return;
                 }
@@ -147,39 +161,6 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 continue;
             }
 
-            // --swap-channels
-            if (0 == _wcsicmp(argv[i], L"--swap-channels")) {
-                if (m_bCopyToRight || m_bCopyToLeft) {
-                    ERR(L"%s", L"--copy-to-right or --copy-to-left is already enabled");
-                    hr = E_INVALIDARG;
-                }
-
-                m_bSwapChannels = true;
-                continue;
-            }
-
-            // --copy-to-right
-            if (0 == _wcsicmp(argv[i], L"--copy-to-right")) {
-                if (m_bSwapChannels || m_bCopyToLeft) {
-                    ERR(L"%s", L"--swap-channels or --copy-to-left is already enabled");
-                    hr = E_INVALIDARG;
-                }
-
-                m_bCopyToRight = true;
-                continue;
-            }
-
-            // --copy-to-left
-            if (0 == _wcsicmp(argv[i], L"--copy-to-left")) {
-                if (m_bSwapChannels || m_bCopyToRight) {
-                    ERR(L"%s", L"--swap-channels or --copy-to-right is already enabled");
-                    hr = E_INVALIDARG;
-                }
-
-                m_bCopyToLeft = true;
-                continue;
-            }
-
             // --duplicate-channels
             if (0 == _wcsicmp(argv[i], L"--duplicate-channels")) {
                 m_bDuplicateChannels = true;
@@ -198,6 +179,51 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 continue;
             }
 
+            // --swap-channels
+            if (0 == _wcsicmp(argv[i], L"--swap-channels")) {
+                if (m_preProcess.m_bCopyToRight || m_preProcess.m_bCopyToLeft) {
+                    ERR(L"%s", L"--copy-to-right or --copy-to-left is already enabled");
+                    hr = E_INVALIDARG;
+                }
+
+                m_preProcess.m_bSwapChannels = true;
+                continue;
+            }
+
+            // --copy-to-right
+            if (0 == _wcsicmp(argv[i], L"--copy-to-right")) {
+                if (m_preProcess.m_bSwapChannels || m_preProcess.m_bCopyToLeft) {
+                    ERR(L"%s", L"--swap-channels or --copy-to-left is already enabled");
+                    hr = E_INVALIDARG;
+                }
+
+                m_preProcess.m_bCopyToRight = true;
+                continue;
+            }
+
+            // --copy-to-left
+            if (0 == _wcsicmp(argv[i], L"--copy-to-left")) {
+                if (m_preProcess.m_bSwapChannels || m_preProcess.m_bCopyToRight) {
+                    ERR(L"%s", L"--swap-channels or --copy-to-right is already enabled");
+                    hr = E_INVALIDARG;
+                }
+
+                m_preProcess.m_bCopyToLeft = true;
+                continue;
+            }
+
+            // --zero-left
+            if (0 == _wcsicmp(argv[i], L"--zero-left")) {
+                m_preProcess.m_bZeroLeft = true;
+                continue;
+            }
+
+            // --zero-right
+            if (0 == _wcsicmp(argv[i], L"--zero-right")) {
+                m_preProcess.m_bZeroRight = true;
+                continue;
+            }
+
             ERR(L"Invalid argument %ls", argv[i]);
             hr = E_INVALIDARG;
             return;
@@ -206,10 +232,10 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
         // open default device if not specified
         if (NULL == m_pMMInDevice) {
             if (m_bForceMonoToStereo && !m_bCaptureRenderer) {
-                hr = get_specific_device(L"Digital Audio Interface (USB Digital Audio)", eCapture, &m_pMMInDevice, szInName);
+                hr = get_specific_device(L"Digital Audio Interface (USB Digital Audio)", eCapture, &m_pMMInDevice, m_szInName);
             }
             else {
-                hr = get_default_device((m_bCaptureRenderer ? eRender : eCapture), &m_pMMInDevice, szInName);
+                hr = get_default_device((m_bCaptureRenderer ? eRender : eCapture), &m_pMMInDevice, m_szInName);
             }
             if (FAILED(hr)) {
                 return;
@@ -218,7 +244,7 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
 
         // open default device if not specified
         if (NULL == m_pMMOutDevice) {
-            hr = get_default_device(eRender, &m_pMMOutDevice, szOutName);
+            hr = get_default_device(eRender, &m_pMMOutDevice, m_szOutName);
             if (FAILED(hr)) {
                 return;
             }

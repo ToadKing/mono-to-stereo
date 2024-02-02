@@ -10,9 +10,7 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMOutDevice,
     int iBufferMs,
     bool bCaptureRenderer,
-    bool bSwapChannels,
-    bool bCopyToRight,
-    bool bCopyToLeft,
+    CPreProcess &preProcess, 
     bool bDuplicateChannels,
     bool bForceMonoToStereo,
     bool bSkipFirstSample,
@@ -37,9 +35,7 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
         pArgs->pMMOutDevice,
         pArgs->iBufferMs,
         pArgs->bCaptureRenderer,
-        pArgs->bSwapChannels,
-        pArgs->bCopyToRight,
-        pArgs->bCopyToLeft,
+        pArgs->preProcess,
         pArgs->bDuplicateChannels,
         pArgs->bForceMonoToStereo,
         pArgs->bSkipFirstSample,
@@ -51,19 +47,26 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
     return 0;
 }
 
-void ProcessSample(BYTE* pData, BYTE* tmp, UINT nBytes, bool bSwapChannels, bool bCopyToRight, bool bCopyToLeft) {
-    if (bSwapChannels) {
+void ProcessSample(BYTE* pData, BYTE* tmp, UINT nBytes, CPreProcess &preProcess) {
+    if (preProcess.m_bSwapChannels) {
         memcpy(tmp, pData, nBytes);
         memcpy(pData, pData + nBytes, nBytes);
         memcpy(pData + nBytes, tmp, nBytes);
     }
-    else if (bCopyToRight) {
+    else if (preProcess.m_bCopyToRight) {
         memcpy(pData + nBytes, pData, nBytes);
     }
-    else if (bCopyToLeft) {
+    else if (preProcess.m_bCopyToLeft) {
         memcpy(pData, pData + nBytes, nBytes);
     }
 
+    if (preProcess.m_bZeroLeft) {
+        memset(pData, 0, nBytes);
+    }
+
+    if (preProcess.m_bZeroRight) {
+        memset(pData + nBytes, 0, nBytes);
+    }
 }
 
 HRESULT LoopbackCapture(
@@ -71,9 +74,7 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMOutDevice,
     int iBufferMs,
     bool bCaptureRenderer,
-    bool bSwapChannels,
-    bool bCopyToRight,
-    bool bCopyToLeft,
+    CPreProcess &preProcess,
     bool bDuplicateChannels,
     bool bForceMonoToStereo,
     bool bSkipFirstSample,
@@ -392,19 +393,20 @@ HRESULT LoopbackCapture(
             }
 
             // pre-process audio data
-            if (pwfx->nChannels >= 2 && (bSwapChannels || bCopyToRight || bCopyToLeft)) {
+            if (pwfx->nChannels >= 2 && preProcess.IsRequired()) {
                 for (UINT i = 0; i < nNumFramesToRead; i++) {
+                    BYTE* pOffset = pData + (i * pwfx->nBlockAlign);
                     switch (pwfx->nChannels) {
                     case 8:
                         // ML and MR
-                        ProcessSample(pData + (nBytes * 6), tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
+                        ProcessSample(pOffset + (nBytes * 6), tmpSample.data(), nBytes, preProcess);
                     case 6:
                     case 4:
                         // RL and RR
-                        ProcessSample(pData + (nBytes * 2), tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
+                        ProcessSample(pOffset + (nBytes * 2), tmpSample.data(), nBytes, preProcess);
                     case 2:
                         // L and R
-                        ProcessSample(pData, tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
+                        ProcessSample(pOffset, tmpSample.data(), nBytes, preProcess);
                         break;
                     }
                 }

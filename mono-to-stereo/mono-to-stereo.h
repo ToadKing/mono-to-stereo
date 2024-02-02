@@ -14,9 +14,7 @@ struct LoopbackCaptureThreadFunctionArguments {
     IMMDevice *pMMOutDevice;
     int iBufferMs;
     bool bCaptureRenderer;
-    bool bSwapChannels;
-    bool bCopyToRight;
-    bool bCopyToLeft;
+    CPreProcess preProcess;
     bool bDuplicateChannels;
     bool bForceMonoToStereo;
     bool bSkipFirstSample;
