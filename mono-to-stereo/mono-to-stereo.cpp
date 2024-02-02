@@ -396,10 +396,14 @@ HRESULT LoopbackCapture(
                 for (UINT i = 0; i < nNumFramesToRead; i++) {
                     switch (pwfx->nChannels) {
                     case 8:
+                        // ML and MR
+                        ProcessSample(pData + (nBytes * 6), tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
                     case 6:
                     case 4:
+                        // RL and RR
                         ProcessSample(pData + (nBytes * 2), tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
                     case 2:
+                        // L and R
                         ProcessSample(pData, tmpSample.data(), nBytes, bSwapChannels, bCopyToRight, bCopyToLeft);
                         break;
                     }
@@ -501,186 +505,54 @@ void sndcpy(void *dst, WAVEFORMATEX* pwfxOut, const void *src, WAVEFORMATEX* pwf
             pData = &in[nFrameOffset * pwfx->nBlockAlign];
             pOutData = &out[nFrameOffset * pwfxOut->nBlockAlign];
 
-            // copy first channel always
+            // copy in L to out L always
             valcpy(pOutData, nOutBytes, pData, nBytes);
 
-            switch (pwfx->nChannels) {
-            case 1: // mono
-                if (!bDuplicateChannels) {
-                    break;
+            if (pwfxOut->nChannels == 1) { // mono
+                // do nothing
+            }
+            if (pwfxOut->nChannels >= 2) { // stereo
+                if (pwfx->nChannels >= 2) {
+                    // copy in R to out R
+                    valcpy(pOutData + nOutBytes, nOutBytes, pData + nBytes, nBytes);
                 }
-
-                switch (pwfxOut->nChannels) {
-                case 2: // stereo
+                else if(bDuplicateChannels) {
                     // copy out L to out R
-                    for (UINT i = 0; i < nOutBytes; i++) {
-                        pOutData[nOutBytes + i] = pOutData[i];
-                    }
-                case 4: // quad
-                case 6: // 5.1
-                case 8: // 7.1
-                    // copy out L to R, RL, RR
-                    UINT nTotal = nOutBytes * 3;
-                    for (UINT i = 0; i < nTotal; i++) {
-                        pOutData[nOutBytes + i] = pOutData[i % nOutBytes];
-                    }
-                    //// fill remainder of channels with blank
-                    //UINT nZero = nOutBytes * (pwfxOut->nChannels - 4);
-                    //for (UINT i = 0; i < nZero; i++) {
-                    //    pOutData[nOutBytes + nTotal + i] = 0;
-                    //}
-                    break;
+                    memcpy(pOutData + nOutBytes, pOutData, nOutBytes);
                 }
-                break;
-            case 2: // stereo
-                switch (pwfxOut->nChannels) {
-                case 1: // mono
-                    // average in R to out L, R 
-                    valcpy(channel.data(), nOutBytes, pData + nBytes, nBytes);
-
-                    // ? ? ? TODO: take average of both L and temp R value and overwrite out L
-
-                    break;
-                case 2: // stereo
-                case 4: // quad
-                case 6: // 5.1
-                case 8: // 7.1
-                    // copy in R to out R
-                    valcpy(pOutData + nOutBytes, nOutBytes, pData + nBytes, nBytes);
-                    if (!bDuplicateChannels || pwfxOut->nChannels == 2) {
-                        break;
-                    }
-
-                    // copy out L, R to out RL, RR
-                    UINT nOffset = nOutBytes * 2;
-                    UINT nTotal = nOutBytes * 2;
-                    for (UINT i = 0; i < nTotal; i++) {
-                        pOutData[nOffset + i] = (bDuplicateChannels ? pOutData[i] : 0);
-                    }
-                    //// fill remainder of channels with blank
-                    //UINT nZero = nOutBytes * (pwfxOut->nChannels - 4);
-                    //for (UINT i = 0; i < nZero; i++) {
-                    //    pOutData[nOffset + nTotal + i] = 0;
-                    //}
-                    break;
-                }
-                break;
-                break;
-            case 4: // quad
-                switch (pwfxOut->nChannels) {
-                case 1: // mono
-                    // average in R to out L, R 
-                    valcpy(channel.data(), nOutBytes, pData + nBytes, nBytes);
-
-                    // ? ? ? TODO: take average of both L and temp R value and overwrite out L
-
-                    break;
-                case 2: // stereo
-                case 4: // quad
-                case 6: // 5.1
-                case 8: // 7.1
-                    // copy in R to out R
-                    valcpy(pOutData + nOutBytes, nOutBytes, pData + nBytes, nBytes);
-                    if (pwfxOut->nChannels == 2) {
-                        break;
-                    }
-
+            }
+            if (pwfxOut->nChannels >= 4) { // quad
+                if (pwfx->nChannels >= 4) {
                     // copy in LR to out LR
                     valcpy(pOutData + (nOutBytes * 2), nOutBytes, pData + (nBytes * 2), nBytes);
                     // copy in RR to out RR
                     valcpy(pOutData + (nOutBytes * 3), nOutBytes, pData + (nBytes * 3), nBytes);
-
-                    //// fill remainder of channels with blank
-                    //UINT nZero = nOutBytes * (pwfxOut->nChannels - 4);
-                    //UINT nOffset = nOutBytes * 4;
-                    //for (UINT i = 0; i < nZero; i++) {
-                    //    pOutData[nOffset + i] = 0;
-                    //}
-                    break;
                 }
-            case 6: // 5.1
-                switch (pwfxOut->nChannels) {
-                case 1: // mono
-                    // average in R to out L, R 
-                    valcpy(channel.data(), nOutBytes, pData + nBytes, nBytes);
-
-                    // ? ? ? TODO: take average of both L and temp R value and overwrite out L
-
-                    break;
-                case 2: // stereo
-                case 4: // quad
-                case 6: // 5.1
-                case 8: // 7.1
-                    // copy in R to out R
-                    valcpy(pOutData + nOutBytes, nOutBytes, pData + nBytes, nBytes);
-                    if (pwfxOut->nChannels == 2) {
-                        break;
-                    }
-
-                    // copy in LR to out LR
-                    valcpy(pOutData + (nOutBytes * 2), nOutBytes, pData + (nBytes * 2), nBytes);
-                    // copy in RR to out RR
-                    valcpy(pOutData + (nOutBytes * 3), nOutBytes, pData + (nBytes * 3), nBytes);
-                    if (pwfxOut->nChannels == 4) {
-                        break;
-                    }
-
-                    // copy in C to out SW
+                else if (bDuplicateChannels) {
+                    // copy out L and R to out RL and RR
+                    memcpy(pOutData + (nOutBytes * 2), pOutData, nOutBytes * 2);
+                }
+            }
+            if (pwfxOut->nChannels >= 6) { // 5.1
+                if (pwfx->nChannels >= 6) {
+                    // copy in C to out C
                     valcpy(pOutData + (nOutBytes * 4), nOutBytes, pData + (nBytes * 4), nBytes);
-                    // copy in RR to out RR
+                    // copy in SW to out SW
                     valcpy(pOutData + (nOutBytes * 5), nOutBytes, pData + (nBytes * 5), nBytes);
-
-                    //// fill remainder of channels with blank
-                    //UINT nZero = nOutBytes * (pwfxOut->nChannels - 6);
-                    //UINT nOffset = nOutBytes * 6;
-                    //for (UINT i = 0; i < nZero; i++) {
-                    //    pOutData[nOffset + i] = 0;
-                    //}
-                    break;
                 }
-                break;
-            case 8: // 7.1
-                switch (pwfxOut->nChannels) {
-                case 1: // mono
-                    // average in R to out L, R 
-                    valcpy(channel.data(), nOutBytes, pData + nBytes, nBytes);
-
-                    // ? ? ? TODO: take average of both L and temp R value and overwrite out L
-
-                    break;
-                case 2: // stereo
-                case 4: // quad
-                case 6: // 5.1
-                case 8: // 7.1
-                    // copy in R to out R
-                    valcpy(pOutData + nOutBytes, nOutBytes, pData + nBytes, nBytes);
-                    if (pwfxOut->nChannels == 2) {
-                        break;
-                    }
-
-                    // copy in LR to out LR
-                    valcpy(pOutData + (nOutBytes * 2), nOutBytes, pData + (nBytes * 2), nBytes);
-                    // copy in RR to out RR
-                    valcpy(pOutData + (nOutBytes * 3), nOutBytes, pData + (nBytes * 3), nBytes);
-                    if (pwfxOut->nChannels == 4) {
-                        break;
-                    }
-
-                    // copy in C to out SW
-                    valcpy(pOutData + (nOutBytes * 4), nOutBytes, pData + (nBytes * 4), nBytes);
-                    // copy in RR to out RR
-                    valcpy(pOutData + (nOutBytes * 5), nOutBytes, pData + (nBytes * 5), nBytes);
-                    if (pwfxOut->nChannels == 6) {
-                        break;
-                    }
-
+            }
+            if (pwfxOut->nChannels >= 8) { // 7.1
+                if (pwfx->nChannels >= 8) {
                     // copy in ML to out ML
                     valcpy(pOutData + (nOutBytes * 6), nOutBytes, pData + (nBytes * 6), nBytes);
                     // copy in MR to out MR
                     valcpy(pOutData + (nOutBytes * 7), nOutBytes, pData + (nBytes * 7), nBytes);
-                    break;
                 }
-                break;
+                else if (bDuplicateChannels) {
+                    // copy out L and R to out RL and RR
+                    // NOTE: copy from front speakers, not rear speakers
+                    memcpy(pOutData + (nOutBytes * 2), pOutData, nOutBytes * 2);
+                }
             }
 
             nFrameOffset++;
