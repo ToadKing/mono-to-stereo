@@ -318,7 +318,6 @@ HRESULT LoopbackCapture(
     DWORD dwWaitResult;
 
     bool bDone = false;
-    bool bFirstPacket = true;
 
     std::vector<BYTE> lastBlock;
     if (bSkipFirstSample) {
@@ -376,7 +375,7 @@ HRESULT LoopbackCapture(
                 return E_UNEXPECTED;
             }
 
-            if (bFirstPacket && AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY == dwFlags) {
+            if (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY == dwFlags) {
                 LOG(L"Probably spurious glitch reported after %u frames", *pnFrames);
             }
             else if (0 != dwFlags) {
@@ -452,7 +451,6 @@ HRESULT LoopbackCapture(
                 return hr;
             }
 
-            bFirstPacket = false;
             *pnFrames += nNumFramesToRead;
         }
     } // capture loop
