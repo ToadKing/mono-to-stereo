@@ -376,7 +376,9 @@ HRESULT LoopbackCapture(
             }
 
             if (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY == dwFlags) {
-                LOG(L"Probably spurious glitch reported after %u frames", *pnFrames);
+                if (*pnFrames != 0) {
+                    LOG(L"Probably spurious glitch reported after %u frames", *pnFrames);
+                }
             }
             else if (0 != dwFlags) {
                 LOG(L"IAudioCaptureClient::GetBuffer set flags to 0x%08x after %u frames", dwFlags, *pnFrames);
