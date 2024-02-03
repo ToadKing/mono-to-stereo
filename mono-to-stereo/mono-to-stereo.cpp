@@ -442,6 +442,8 @@ HRESULT LoopbackCapture(
             hr = pRenderClient->ReleaseBuffer(nNumFramesToWrite, 0);
             if (FAILED(hr)) {
                 ERR(L"IAudioCaptureClient::ReleaseBuffer failed (output) after %u frames: hr = 0x%08x", *pnFrames, hr);
+                // release capture buffer before exiting
+                pAudioCaptureClient->ReleaseBuffer(nNumFramesToRead);
                 return hr;
             }
 
