@@ -318,6 +318,7 @@ HRESULT LoopbackCapture(
     DWORD dwWaitResult;
 
     bool bDone = false;
+    bool bFirstPacket = true;
 
     std::vector<BYTE> lastBlock;
     if (bSkipFirstSample) {
@@ -344,7 +345,6 @@ HRESULT LoopbackCapture(
             return E_UNEXPECTED;
         }
 
-        bool bFirstPacket = true;
         for (;;) {
             // get the captured data
             BYTE* pData;
@@ -451,6 +451,7 @@ HRESULT LoopbackCapture(
                 return hr;
             }
 
+            bFirstPacket = false;
             *pnFrames += nNumFramesToRead;
         }
     } // capture loop
