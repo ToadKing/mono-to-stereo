@@ -533,7 +533,6 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
                 return E_UNEXPECTED;
             }
         }
-
     }
 
     if (NULL == *ppMMDevice) {

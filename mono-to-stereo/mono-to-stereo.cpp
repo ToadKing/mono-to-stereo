@@ -17,7 +17,7 @@ HRESULT LoopbackCapture(
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
     PUINT32 pnFrames
-    );
+);
 
 DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
     LoopbackCaptureThreadFunctionArguments* pArgs =
@@ -81,7 +81,7 @@ HRESULT LoopbackCapture(
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
     PUINT32 pnFrames
-    ) {
+) {
     HRESULT hr;
 
     // activate an IAudioClient
@@ -90,7 +90,7 @@ HRESULT LoopbackCapture(
         __uuidof(IAudioClient),
         CLSCTX_ALL, NULL,
         (void**)&pAudioClient
-        );
+    );
     if (FAILED(hr)) {
         ERR(L"IMMDevice::Activate(IAudioClient) failed: hr = 0x%08x", hr);
         return hr;
@@ -153,7 +153,7 @@ HRESULT LoopbackCapture(
         AUDCLNT_SHAREMODE_SHARED,
         (bCaptureRenderer ? AUDCLNT_STREAMFLAGS_LOOPBACK : AUDCLNT_STREAMFLAGS_EVENTCALLBACK),
         0, 0, pwfx, 0
-        );
+    );
     if (FAILED(hr)) {
         ERR(L"IAudioClient::Initialize failed: hr = 0x%08x", hr);
         return hr;
@@ -164,7 +164,7 @@ HRESULT LoopbackCapture(
     hr = pAudioClient->GetService(
         __uuidof(IAudioCaptureClient),
         (void**)&pAudioCaptureClient
-        );
+    );
     if (FAILED(hr)) {
         ERR(L"IAudioClient::GetService(IAudioCaptureClient) failed: hr = 0x%08x", hr);
         return hr;
@@ -193,7 +193,7 @@ HRESULT LoopbackCapture(
             &liFirstFire,
             lTimeBetweenFires,
             NULL, NULL, FALSE
-            );
+        );
         if (!bOK) {
             DWORD dwErr = GetLastError();
             ERR(L"SetWaitableTimer failed: last error = %u", dwErr);
@@ -235,7 +235,7 @@ HRESULT LoopbackCapture(
         __uuidof(IAudioClient),
         CLSCTX_ALL, NULL,
         (void**)&pAudioOutClient
-        );
+    );
     if (FAILED(hr)) {
         ERR(L"IMMDevice::Activate(IAudioClient) failed (output): hr = 0x%08x", hr);
         return hr;
@@ -265,7 +265,7 @@ HRESULT LoopbackCapture(
         AUDCLNT_SHAREMODE_SHARED, 0,
         static_cast<REFERENCE_TIME>(iBufferMs)* 10000,
         0, pwfxOut, 0
-        );
+    );
     if (FAILED(hr)) {
         ERR(L"IAudioClient::Initialize failed (output): hr = 0x%08x", hr);
         return hr;
@@ -275,7 +275,7 @@ HRESULT LoopbackCapture(
     hr = pAudioOutClient->GetService(
         __uuidof(IAudioRenderClient),
         (void**)&pRenderClient
-        );
+    );
     if (FAILED(hr)) {
         ERR(L"IAudioClient::GetService(IAudioRenderClient) failed: hr = 0x%08x", hr);
         return hr;
@@ -331,7 +331,7 @@ HRESULT LoopbackCapture(
         dwWaitResult = WaitForMultipleObjects(
             ARRAYSIZE(waitArray), waitArray,
             FALSE, INFINITE
-            );
+        );
 
         if (WAIT_OBJECT_0 == dwWaitResult) {
             LOG(L"Received stop event after %u frames", *pnFrames);
