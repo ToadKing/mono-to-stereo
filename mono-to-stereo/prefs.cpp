@@ -18,7 +18,7 @@ void usage(LPCWSTR exe) {
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
-        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex] [--buffer-size 128] [--no-skip-first-sample]\n"
+        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex] [--buffer-size 128] [--no-skip-first-sample]"
         L" [--no-mono-to-stereo] [--duplicate-channels] [--zero-left] [--zero-right] [--swap-channels] [--copy-to-right] [--copy-to-left]\n"
         L"\n"
         L"    -? prints this message.\n"
