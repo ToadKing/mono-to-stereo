@@ -284,7 +284,7 @@ HRESULT LoopbackCapture(
 
     // Get the actual size of the allocated buffer.
     UINT32 clientBufferFrameCount;
-    hr = pAudioClient->GetBufferSize(&clientBufferFrameCount);
+    hr = pAudioOutClient->GetBufferSize(&clientBufferFrameCount);
     if (FAILED(hr)) {
         ERR(L"IAudioClient::GetBufferSize failed (render): hr = 0x%08x", hr);
         return hr;
