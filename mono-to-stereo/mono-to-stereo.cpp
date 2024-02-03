@@ -420,7 +420,7 @@ HRESULT LoopbackCapture(
                     Sleep(1);
                     continue;
                 }
-                else if (FAILED(hr)) {
+                if (FAILED(hr)) {
                     ERR(L"IAudioCaptureClient::GetBuffer failed (output) after %u frames: hr = 0x%08x", *pnFrames, hr);
                     // release capture buffer before exiting
                     pAudioCaptureClient->ReleaseBuffer(nNumFramesToRead);
