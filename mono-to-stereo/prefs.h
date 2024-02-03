@@ -11,7 +11,6 @@ public:
     CPreProcess();
 
     bool IsRequired();
-
 };
 
 class CPrefs {
@@ -21,10 +20,10 @@ public:
     WCHAR m_szInName[FILENAME_MAX];
     WCHAR m_szOutName[FILENAME_MAX];
     int m_iBufferMs;
+    bool m_bSkipFirstSample;
+    bool m_bForceMonoToStereo;
     bool m_bCaptureRenderer;
     bool m_bDuplicateChannels;
-    bool m_bForceMonoToStereo;
-    bool m_bSkipFirstSample;
     CPreProcess m_preProcess;
 
     // set hr to S_FALSE to abort but return success

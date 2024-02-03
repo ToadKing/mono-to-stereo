@@ -53,11 +53,11 @@ int do_everything(int argc, LPCWSTR argv[]) {
     threadArgs.pMMInDevice = prefs.m_pMMInDevice;
     threadArgs.pMMOutDevice = prefs.m_pMMOutDevice;
     threadArgs.iBufferMs = prefs.m_iBufferMs;
-    threadArgs.bCaptureRenderer = prefs.m_bCaptureRenderer;
-    threadArgs.preProcess = prefs.m_preProcess;
-    threadArgs.bDuplicateChannels = prefs.m_bDuplicateChannels;
-    threadArgs.bForceMonoToStereo = prefs.m_bForceMonoToStereo;
     threadArgs.bSkipFirstSample = prefs.m_bSkipFirstSample;
+    threadArgs.bForceMonoToStereo = prefs.m_bForceMonoToStereo;
+    threadArgs.bCaptureRenderer = prefs.m_bCaptureRenderer;
+    threadArgs.bDuplicateChannels = prefs.m_bDuplicateChannels;
+    threadArgs.preProcess = prefs.m_preProcess;
     threadArgs.hStartedEvent = hStartedEvent;
     threadArgs.hStopEvent = hStopEvent;
     threadArgs.nFrames = 0;

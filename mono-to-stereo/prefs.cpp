@@ -18,9 +18,8 @@ void usage(LPCWSTR exe) {
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
-        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex]"
-        L" [--buffer-size 128] [--duplicate-channels] [--force-mono-to-stereo] [--skip-first-sample]"
-        L" [--zero-left] [--zero-right] [--swap-channels] [--copy-to-right] [--copy-to-left] \n"
+        L"%ls [--capture-renderer] [--in-device \"Device long name\"|DeviceIndex] [--out-device \"Device long name\"|DeviceIndex] [--buffer-size 128] [--no-skip-first-sample]\n"
+        L" [--no-mono-to-stereo] [--duplicate-channels] [--zero-left] [--zero-right] [--swap-channels] [--copy-to-right] [--copy-to-left]\n"
         L"\n"
         L"    -? prints this message.\n"
         L"    --list-devices displays the long names of all active capture and render devices.\n"
@@ -28,16 +27,17 @@ void usage(LPCWSTR exe) {
         L"    --in-device captures from the specified device to capture (\"Digital Audio Interface (USB Digital Audio)\" if omitted)\n"
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
-        L"    --duplicate-channels duplicate channel data to other channels"
-        L"    --force-mono-to-stereo force mono capture audio to be treated as stereo without conversion\n"
-        L"    --skip-first-sample skip the first channel sample\n"
-        L"    --zero-left zero out left channel"
-        L"    --zero-right zero out right channel"
+        L"    --no-skip-first-sample do not skip the first channel sample\n"
+        L"    --no-mono-to-stereo do not force mono capture device to be treated as stereo without conversion if mono device\n"
+        L"    --duplicate-channels duplicate left and right audio if render device has more channels\n"
+        L"    --zero-left zero out all capture left channels\n"
+        L"    --zero-right zero out all capture right channels\n"
         L"    --swap-channels swap all available left and right channels (cannot enable if already copying to right or left)\n"
         L"    --copy-to-right copy left channel data to right channel (cannot enable if already swapping or copying to left)\n"
         L"    --copy-to-left copy right channel data to left channel (cannot enable if already swapping or copying to right)\n",
         VERSION, exe, exe, exe, DEFAULT_BUFFER_MS
-    );
+
+        );
 }
 
 
@@ -59,10 +59,10 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
     : m_pMMInDevice(NULL)
     , m_pMMOutDevice(NULL)
     , m_iBufferMs(DEFAULT_BUFFER_MS)
+    , m_bSkipFirstSample(true)
+    , m_bForceMonoToStereo(true)
     , m_bCaptureRenderer(false)
     , m_bDuplicateChannels(false)
-    , m_bForceMonoToStereo(false)
-    , m_bSkipFirstSample(false)
 {
     switch (argc) {
     case 2:
@@ -150,6 +150,18 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 continue;
             }
 
+            // --skip-first-sample
+            if (0 == _wcsicmp(argv[i], L"--no-skip-first-sample")) {
+                m_bSkipFirstSample = false;
+                continue;
+            }
+
+            // --force-mono-to-stereo
+            if (0 == _wcsicmp(argv[i], L"--no-mono-to-stereo")) {
+                m_bForceMonoToStereo = false;
+                continue;
+            }
+
             // --capture-renderer
             if (0 == _wcsicmp(argv[i], L"--capture-renderer")) {
                 if (NULL != m_pMMInDevice) {
@@ -165,18 +177,6 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
             // --duplicate-channels
             if (0 == _wcsicmp(argv[i], L"--duplicate-channels")) {
                 m_bDuplicateChannels = true;
-                continue;
-            }
-
-            // --force-mono-to-stereo
-            if (0 == _wcsicmp(argv[i], L"--force-mono-to-stereo")) {
-                m_bForceMonoToStereo = true;
-                continue;
-            }
-
-            // --skip-first-sample
-            if (0 == _wcsicmp(argv[i], L"--skip-first-sample")) {
-                m_bSkipFirstSample = true;
                 continue;
             }
 
@@ -250,9 +250,6 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 return;
             }
         }
-
-        //if (m_bCaptureRenderer && 
-        //    )
     }
 }
 

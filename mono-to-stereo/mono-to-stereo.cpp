@@ -9,11 +9,11 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMInDevice,
     IMMDevice* pMMOutDevice,
     int iBufferMs,
-    bool bCaptureRenderer,
-    CPreProcess &preProcess, 
-    bool bDuplicateChannels,
-    bool bForceMonoToStereo,
     bool bSkipFirstSample,
+    bool bForceMonoToStereo,
+    bool bCaptureRenderer,
+    bool bDuplicateChannels,
+    CPreProcess &preProcess,
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
     PUINT32 pnFrames
@@ -34,11 +34,11 @@ DWORD WINAPI LoopbackCaptureThreadFunction(LPVOID pContext) {
         pArgs->pMMInDevice,
         pArgs->pMMOutDevice,
         pArgs->iBufferMs,
-        pArgs->bCaptureRenderer,
-        pArgs->preProcess,
-        pArgs->bDuplicateChannels,
-        pArgs->bForceMonoToStereo,
         pArgs->bSkipFirstSample,
+        pArgs->bForceMonoToStereo,
+        pArgs->bCaptureRenderer,
+        pArgs->bDuplicateChannels,
+        pArgs->preProcess,
         pArgs->hStartedEvent,
         pArgs->hStopEvent,
         &pArgs->nFrames
@@ -73,11 +73,11 @@ HRESULT LoopbackCapture(
     IMMDevice* pMMInDevice,
     IMMDevice* pMMOutDevice,
     int iBufferMs,
-    bool bCaptureRenderer,
-    CPreProcess &preProcess,
-    bool bDuplicateChannels,
-    bool bForceMonoToStereo,
     bool bSkipFirstSample,
+    bool bForceMonoToStereo,
+    bool bCaptureRenderer,
+    bool bDuplicateChannels,
+    CPreProcess &preProcess,
     HANDLE hStartedEvent,
     HANDLE hStopEvent,
     PUINT32 pnFrames
@@ -186,7 +186,7 @@ HRESULT LoopbackCapture(
     if (bCaptureRenderer) {
         // set the waitable timer
         LARGE_INTEGER liFirstFire;
-        liFirstFire.QuadPart = 0LL;//  -hnsDefaultDevicePeriod / 2; // negative means relative time
+        liFirstFire.QuadPart = -hnsDefaultDevicePeriod / 2; // negative means relative time
         LONG lTimeBetweenFires = (LONG)hnsDefaultDevicePeriod / 2 / (10 * 1000); // convert to milliseconds
         BOOL bOK = SetWaitableTimer(
             hWakeUp,
@@ -284,27 +284,25 @@ HRESULT LoopbackCapture(
 
     // Get the actual size of the allocated buffer.
     UINT32 clientBufferFrameCount;
-    if (bCaptureRenderer) {
-        hr = pAudioClient->GetBufferSize(&clientBufferFrameCount);
-        if (FAILED(hr)) {
-            ERR(L"IAudioClient::GetBufferSize failed (render): hr = 0x%08x", hr);
-            return hr;
-        }
+    hr = pAudioClient->GetBufferSize(&clientBufferFrameCount);
+    if (FAILED(hr)) {
+        ERR(L"IAudioClient::GetBufferSize failed (render): hr = 0x%08x", hr);
+        return hr;
     }
 
-    //// Grab half the buffer for the initial fill operation.
-    //BYTE* tmp;
-    //hr = pRenderClient->GetBuffer(clientBufferFrameCount / 2, &tmp);
-    //if (FAILED(hr)) {
-    //    ERR(L"IAudioClient::GetBuffer failed (output): hr = 0x%08x", hr);
-    //    return hr;
-    //}
+    // Grab half the buffer for the initial fill operation.
+    BYTE* tmp;
+    hr = pRenderClient->GetBuffer(clientBufferFrameCount / 2, &tmp);
+    if (FAILED(hr)) {
+        ERR(L"IAudioClient::GetBuffer failed (output): hr = 0x%08x", hr);
+        return hr;
+    }
 
-    //hr = pRenderClient->ReleaseBuffer(clientBufferFrameCount / 2, AUDCLNT_BUFFERFLAGS_SILENT);
-    //if (FAILED(hr)) {
-    //    ERR(L"IAudioCaptureClient::ReleaseBuffer failed (output): hr = 0x%08x", hr);
-    //    return hr;
-    //}
+    hr = pRenderClient->ReleaseBuffer(clientBufferFrameCount / 2, AUDCLNT_BUFFERFLAGS_SILENT);
+    if (FAILED(hr)) {
+        ERR(L"IAudioCaptureClient::ReleaseBuffer failed (output): hr = 0x%08x", hr);
+        return hr;
+    }
 
     hr = pAudioOutClient->Start();
     if (FAILED(hr)) {
