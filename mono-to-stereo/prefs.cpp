@@ -28,7 +28,7 @@ void usage(LPCWSTR exe) {
         L"    --out-device device to stream stereo audio to (default if omitted)\n"
         L"    --buffer-size set the size of the audio buffer, in milliseconds (default to %dms)\n"
         L"    --no-skip-first-sample do not skip the first channel sample\n"
-        L"    --no-mono-to-stereo do not force mono capture device to be treated as stereo without conversion if mono device\n"
+        L"    --no-mono-to-stereo do not force mono capture device to be treated as stereo without conversion if mono capture device\n"
         L"    --duplicate-channels duplicate left and right audio if render device has more channels\n"
         L"    --zero-left zero out all capture left channels\n"
         L"    --zero-right zero out all capture right channels\n"
@@ -51,7 +51,7 @@ CPreProcess::CPreProcess()
 
 
 bool CPreProcess::IsRequired() {
-    return (m_bZeroLeft || m_bZeroRight|| m_bSwapChannels || m_bCopyToRight || m_bCopyToLeft);
+    return (m_bZeroLeft || m_bZeroRight || m_bSwapChannels || m_bCopyToRight || m_bCopyToLeft);
 }
 
 
@@ -150,13 +150,13 @@ CPrefs::CPrefs(int argc, LPCWSTR argv[], HRESULT &hr)
                 continue;
             }
 
-            // --skip-first-sample
+            // --no-skip-first-sample
             if (0 == _wcsicmp(argv[i], L"--no-skip-first-sample")) {
                 m_bSkipFirstSample = false;
                 continue;
             }
 
-            // --force-mono-to-stereo
+            // --no-mono-to-stereo
             if (0 == _wcsicmp(argv[i], L"--no-mono-to-stereo")) {
                 m_bForceMonoToStereo = false;
                 continue;

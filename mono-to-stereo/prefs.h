@@ -11,6 +11,7 @@ public:
     CPreProcess();
 
     bool IsRequired();
+
 };
 
 class CPrefs {
@@ -29,4 +30,5 @@ public:
     // set hr to S_FALSE to abort but return success
     CPrefs(int argc, LPCWSTR argv[], HRESULT &hr);
     ~CPrefs();
+
 };
