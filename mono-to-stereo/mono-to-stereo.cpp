@@ -286,7 +286,7 @@ HRESULT LoopbackCapture(
     UINT32 clientBufferFrameCount;
     hr = pAudioOutClient->GetBufferSize(&clientBufferFrameCount);
     if (FAILED(hr)) {
-        ERR(L"IAudioClient::GetBufferSize failed (render): hr = 0x%08x", hr);
+        ERR(L"IAudioClient::GetBufferSize failed (output): hr = 0x%08x", hr);
         return hr;
     }
 
