@@ -34,7 +34,7 @@ void usage(LPCWSTR exe) {
         L"    --zero-right zero out all capture right channels\n"
         L"    --swap-channels swap all available left and right channels (cannot enable if already copying to right or left)\n"
         L"    --copy-to-right copy left channel data to right channel (cannot enable if already swapping or copying to left)\n"
-        L"    --copy-to-left copy right channel data to left channel (cannot enable if already swapping or copying to right)\n",
+        L"    --copy-to-left copy right channel data to left channel (cannot enable if already swapping or copying to right)",
         VERSION, exe, exe, exe, DEFAULT_BUFFER_MS
 
         );
