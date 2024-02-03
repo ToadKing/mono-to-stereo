@@ -14,7 +14,7 @@ HRESULT get_specific_device(LPCWSTR szLongName, EDataFlow direction, IMMDevice *
 
 void usage(LPCWSTR exe) {
     LOG(
-        L"audio-to-audio v%s\n"
+        L"mono-to-stereo v%s\n"
         L"\n"
         L"%ls -?\n"
         L"%ls --list-devices\n"
