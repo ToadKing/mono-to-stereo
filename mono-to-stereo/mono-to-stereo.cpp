@@ -429,7 +429,6 @@ HRESULT LoopbackCapture(
                 break;
             }
 
-            //static_cast<size_t>(lBytesWeRead - pwfx->nBlockAlign)
             if (bSkipFirstSample) {
                 sndcpy(pOutData, pwfxOut, lastBlock.data(), pwfx, 1, bDuplicateChannels);
                 sndcpy(pOutData + pwfxOut->nBlockAlign, pwfxOut, pData, pwfx, nNumFramesToWrite - 1, bDuplicateChannels);
