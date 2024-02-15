@@ -1,5 +1,7 @@
 # mono-to-stereo
 
+**No longer maintained:** If you want further support you should look at [one of the forks](https://github.com/ToadKing/mono-to-stereo/forks).
+
 Takes a mono input and renders it as if it was an interleaved stereo input. Works on MS2109 capture
 devices where the audio input is a 96khz mono stream but in actuality is a 48khz stereo stream with
 the first left channel sample missing. In order to support this device better, accounting for this
